@@ -3471,7 +3471,7 @@ function farmMapPickKebele(woreda,seed){
   return k[Math.abs(seed)%k.length];
 }
 function farmMapTooltipHTML(o){
-  const tag=o.isSubject?'<div class="fmt-badge">Subject farm</div>':'<div class="fmt-badge fmt-near">Neighbouring parcel</div>';
+  const tag=o.isSubject?'':'<div class="fmt-badge fmt-near">Neighbouring parcel</div>';
   return '<div class="fmt">'+tag+
     '<div class="fmt-sec">Administration</div>'+
     '<div class="fmt-row"><span>Region</span><b>'+farmMapEsc(o.region)+"</b></div>"+
@@ -3525,6 +3525,48 @@ function buildTraceFarmParcelTip(tr,c,ll,farmId,hrvId,isSubject){
     areaSqm:String(areaSqm),
     subtitle:sub.join(" · "),
   });
+}
+function farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvId){
+  const farm=tr.nodes[subjectFarmId];
+  const hrv=hrvId?tr.nodes[hrvId]:null;
+  const zone=ZONES[c.zone];
+  const wId=(farm&&farm.wrdaId)||(hrv&&hrv.wrdaId);
+  const wor=zone&&wId?zone.woredas[wId]:null;
+  const owner=(farm&&farm.farmer)||(hrv&&hrv.name)||"—";
+  const haStr=(farm&&farm.ha)||(hrv&&hrv.ha)||"—";
+  const seed=strSeed((subjectFarmId||"")+"-"+(hrvId||""));
+  const keb=farmMapPickKebele(wor||{},seed+17);
+  const gps=subjectLl.lat.toFixed(4)+"°N "+subjectLl.lng.toFixed(4)+"°E";
+  const rows=[["Farmer / operator",farmMapEsc(owner)],["Farm UID",farmMapEsc(subjectFarmId||"—")]];
+  if(hrvId)rows.push(["Harvest lot",farmMapEsc(hrvId)]);
+  rows.push(["Plot size",farmMapEsc(String(haStr))+" ha"],["Woreda",farmMapEsc(wor?wor.name:"—")],["Kebele",farmMapEsc(keb)],["GPS",farmMapEsc(gps)]);
+  return'<div class="hrv-map-sum"><div class="hrv-map-sum-h">Subject farm — pinned summary</div><dl class="hrv-map-sum-dl">'+rows.map(([k,v])=>"<div><dt>"+farmMapEsc(k)+"</dt><dd>"+v+"</dd></div>").join("")+"</dl></div>";
+}
+function hrvMapAddStandardControls(map,legendHtml){
+  const osm=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  });
+  const topo=L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{
+    maxZoom:17,
+    attribution:'&copy; <a href="https://opentopomap.org/">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>), &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  });
+  const sat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{
+    maxZoom:19,
+    attribution:"Tiles &copy; Esri &mdash; Earthstar Geographics",
+  });
+  osm.addTo(map);
+  L.control.layers({"Street (map)":osm,"Terrain (contours)":topo,"Satellite":sat},{},{collapsed:true,position:"topleft"}).addTo(map);
+  L.control.scale({metric:true,imperial:false,maxWidth:150}).addTo(map);
+  const Leg=L.Control.extend({
+    options:{position:"bottomright"},
+    onAdd:function(){
+      const d=L.DomUtil.create("div","hrv-map-legend");
+      d.innerHTML=legendHtml;
+      return d;
+    },
+  });
+  (new Leg()).addTo(map);
 }
 function genNearbyDemoParcels(cLat,cLng,subjectKey,zone,woreda,wId,count,subjectExtentDeg){
   const subE=subjectExtentDeg||0;
@@ -3629,9 +3671,11 @@ function resolveContainerIdFromUid(uid){
 function closeHrvMapModal(){
   const ov=document.getElementById("hrv-map-ov");
   const host=document.getElementById("hrv-map-host");
+  const sum=document.getElementById("hrv-map-summary");
   if(ov){ov.classList.remove("open");ov.setAttribute("aria-hidden","true");}
   if(_hrvMap){try{_hrvMap.remove();}catch(e){}_hrvMap=null;}
   if(host)host.innerHTML="";
+  if(sum){sum.innerHTML="";sum.setAttribute("hidden","");}
 }
 function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
   if(typeof L==="undefined"){toast("Map library not loaded");return;}
@@ -3671,13 +3715,14 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
   ov.setAttribute("aria-hidden","false");
   host.innerHTML="";
   if(_hrvMap){try{_hrvMap.remove();}catch(e){}_hrvMap=null;}
+  const sumPanel=document.getElementById("hrv-map-summary");
+  if(sumPanel){sumPanel.innerHTML="";sumPanel.setAttribute("hidden","");}
   if(!show.length){
     host.innerHTML='<div class="hrv-map-empty">No harvest batches with map coordinates for this shipment.</div>';
     return;
   }
   setTimeout(()=>{
     _hrvMap=L.map(host,{scrollWheelZoom:true,minZoom:5,maxZoom:19});
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(_hrvMap);
     const lg=L.layerGroup().addTo(_hrvMap);
     const focused=!!(focusHrvId||focusFarmUid);
     if(focused){
@@ -3705,11 +3750,27 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
         .bindTooltip(subTip,ttOpts).addTo(lg);
       L.marker([subjectLl.lat,subjectLl.lng],{icon:farmMapRedIcon(),zIndexOffset:500})
         .bindTooltip("<div class=\"fmt-pin-tip\"><b>Subject</b><br>Harvest / farm anchor</div>",{...ttOpts,direction:"top"}).addTo(lg);
+      const dLat=Math.max(subExtent*1.15,0.000018);
+      L.marker([subjectLl.lat+dLat,subjectLl.lng],{
+        icon:L.divIcon({
+          className:"hrv-subject-farm-lbl-wrap",
+          html:'',
+          iconSize:[92,22],
+          iconAnchor:[46,22],
+        }),
+        interactive:false,
+        zIndexOffset:460,
+      }).addTo(lg);
+      if(sumPanel){
+        sumPanel.innerHTML=farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvForTip);
+        sumPanel.removeAttribute("hidden");
+      }
       /* Frame only the subject parcel; neighbours stay on the map but may be cropped until zoom/pan */
       const b=L.latLngBounds(subRing);
       b.extend([subjectLl.lat,subjectLl.lng]);
       _hrvMap.fitBounds(b.pad(0.04),{maxZoom:19,padding:[16,16]});
       if(_hrvMap.getZoom()<15)_hrvMap.setZoom(15);
+      hrvMapAddStandardControls(_hrvMap,'<div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-subj"></span> Subject parcel</div><div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-nei"></span> Neighbouring holdings</div>');
     }else{
       const rings=[];
       show.forEach(p=>{
@@ -3725,6 +3786,7 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
       rings.forEach(r=>{r.forEach(ll=>b.extend(ll));});
       show.forEach(p=>b.extend([p.ll.lat,p.ll.lng]));
       _hrvMap.fitBounds(b,{padding:[28,28],maxZoom:15});
+      hrvMapAddStandardControls(_hrvMap,'<div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-batch"></span> Harvest parcel</div><div class="hrv-leg-row"><span class="hrv-leg-dot"></span> Batch anchor</div>');
     }
     _hrvMap.invalidateSize(true);
   },60);

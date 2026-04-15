@@ -555,8 +555,38 @@ input,select,textarea{font-family:inherit;font-size:13px}
 .hrv-map-x:hover{background:var(--bg);color:var(--tx)}
 .hrv-map-x:active{box-shadow:var(--press-inset-mid);transform:scale(.94)}
 .hrv-map-x:focus-visible{outline:none;box-shadow:var(--focus-ring-neutral)}
+.hrv-map-mapwrap{display:flex;flex-direction:column;flex-shrink:0;min-height:0}
 .hrv-map-host{height:min(52vh,440px);width:100%;flex-shrink:0;background:#e8e4dc;z-index:0;position:relative}
 .hrv-map-host .leaflet-container{font-family:inherit}
+.hrv-map-summary{
+  flex-shrink:0;padding:10px 18px 12px;border-top:1px solid var(--border2);
+  background:linear-gradient(180deg,#faf8f4,#fff);font-size:11px;color:var(--tx2);
+}
+.hrv-map-summary[hidden]{display:none !important}
+.hrv-map-sum-h{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#7f1d1d;margin-bottom:8px}
+.hrv-map-sum-dl{margin:0;padding:0}
+.hrv-map-sum-dl > div{display:grid;grid-template-columns:minmax(100px,34%) 1fr;gap:6px 12px;align-items:baseline;margin:4px 0}
+.hrv-map-sum-dl dt{margin:0;font-size:10px;color:var(--tx3);font-weight:600}
+.hrv-map-sum-dl dd{margin:0;font-size:11px;color:var(--tx);font-weight:500}
+.hrv-map-legend{
+  padding:8px 10px;background:rgba(255,255,255,.94);border:1px solid rgba(0,0,0,.12);
+  border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.12);font-size:10px;line-height:1.45;color:var(--tx2);
+  margin-bottom:22px !important;clear:both;
+}
+.hrv-leg-row{display:flex;align-items:center;gap:8px;margin:2px 0}
+.hrv-leg-swatch{display:inline-block;width:14px;height:10px;border-radius:2px;border:1px solid rgba(0,0,0,.2);flex-shrink:0}
+.hrv-leg-subj{background:#fecaca;border-color:#b91c1c}
+.hrv-leg-nei{background:#d6d3d1;border-color:#78716c}
+.hrv-leg-batch{background:#bbf7d0;border-color:#15803d}
+.hrv-leg-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;border:2px solid #14532d}
+.hrv-subject-farm-lbl-wrap{background:none;border:none}
+.hrv-subject-farm-lbl{
+  padding:2px 8px;border-radius:4px;background:rgba(254,242,242,.95);border:1px solid #b91c1c;
+  font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#991b1b;
+  white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+.hrv-map-host .leaflet-control-layers{background:rgba(255,255,255,.95);border-radius:6px;margin-top:46px !important}
+.hrv-map-host .leaflet-control-layers-toggle{width:34px;height:34px}
 .hrv-map-empty{display:flex;align-items:center;justify-content:center;height:100%;min-height:200px;padding:24px;text-align:center;font-size:13px;color:var(--tx3);line-height:1.5}
 .hrv-map-foot{margin:0;padding:8px 18px 14px;font-size:10px;color:var(--tx3);border-top:1px solid var(--border2);flex-shrink:0}
 
