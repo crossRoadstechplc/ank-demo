@@ -200,7 +200,7 @@ const LISTINGS={
   "LIST-IOI-0042":{type:"IOI",state:"LIVE",lot:"EXP-0087",seller:"ACT-EXP-002",sellerVisible:true,weight:17400,grade:"Yirgacheffe G1 Washed",priceMode:"Outright",priceUSDkg:12.79,priceUSDlb:5.80,incoterm:"At Mill Yirgacheffe",duration:"14 days",ends:"26 Apr 2026",visibility:["Open Market","Rating-gated ≥4★"],bids:0,quality:"SCA 88.25",eudr:true,note:"Specialty buyers, prior YCFCU experience preferred."},
   "LIST-RFQ-0118":{type:"RFQ",state:"ENGAGED",lot:null,buyer:"ACT-UNI-OCFCU",buyerCompany:"Oromia Coffee Farmers Cooperative Union",weight:18000,grade:"Sidamo G1/G2 Natural",priceMode:"Differential",differential:"NY-C +85¢",incoterm:"At Modjo Dry Port",duration:"7 days",ends:"19 Apr 2026",visibility:["Invite-only (12 exporters)"],offers:4,quality:"SCA ≥85 required",eudr:true,note:"Quality binding: price-adjustable, ±5¢ per cup point."},
   "LIST-ENG-0007":{type:"ENG",state:"LIVE",lot:"EXP-0156",seller:"ACT-EXP-002",sellerVisible:false,weight:16800,grade:"Guji G1 Natural",priceMode:"Outright",reserveUSDkg:10.58,reserveUSDlb:4.80,currentUSDkg:11.57,currentUSDlb:5.25,minIncrement:"0.05 USD/kg",incoterm:"At Mill Hambela",ends:"15 Apr 2026 18:00 UTC",antiSniping:"5-min extension, 30-min cap",visibility:["Rating-gated ≥4★","Region: EU + UK + JP"],bids:7,quality:"SCA 89.75",eudr:true},
-  "LIST-SEL-0019":{type:"SEALED",state:"LIVE",lot:"EXP-0023",seller:"ACT-EXP-002",sellerVisible:false,weight:17500,grade:"Sidama G1 Washed",priceMode:"Outright",ends:"22 Apr 2026 12:00 UTC",visibility:["Invite-only (8 importers)"],bidsReceived:5,quality:"SCA 86.75",eudr:true,note:"Fully blind until close. No bid visibility."},
+  "LIST-SEL-0019":{type:"SEALED",state:"LIVE",lot:"EXP-0023",seller:"ACT-EXP-002",sellerVisible:false,weight:17500,grade:"Sidama G1 Washed",priceMode:"Outright",reserveUSDkg:10.05,reserveUSDlb:4.56,ends:"22 Apr 2026 12:00 UTC",visibility:["Invite-only (8 importers)"],bidsReceived:5,quality:"SCA 86.75",eudr:true,note:"Fully blind until close. No bid visibility."},
   "LIST-REV-0003":{type:"REV",state:"LIVE",lot:null,buyer:"ACT-UNI-SCFCU",buyerCompany:"Sidama Coffee Farmers Cooperative Union",weight:20000,grade:"Yirgacheffe Washed, SCA ≥87",priceMode:"Outright",ceilingUSDkg:13.23,ceilingUSDlb:6.00,currentLowUSDkg:12.57,currentLowUSDlb:5.70,incoterm:"At Exporter Warehouse Addis",ends:"18 Apr 2026",visibility:["Open Market","Verification: Enhanced only"],bids:6,quality:"Required: SCA ≥87, EUDR ready",eudr:true},
   "LIST-ENG-0042":{type:"ENG",state:"LIVE",lot:null,seller:"ACT-EXP-MAIN",sellerVisible:true,weight:17000,grade:"Limu G1 Washed",priceMode:"Outright",reserveUSDkg:9.26,reserveUSDlb:4.20,currentUSDkg:10.03,currentUSDlb:4.55,minIncrement:"0.05 USD/lb",incoterm:"At Mill Limu",ends:"20 Apr 2026 16:00 UTC",antiSniping:"5-min extension, 30-min cap",visibility:["Open Market","EU + US + JP","Rating-gated ≥4★"],bids:3,quality:"SCA 87.50",eudr:true,note:"Kaffa Trading flagship · Anderacha washing station · 2025/26 harvest peak"}
 };
@@ -292,7 +292,6 @@ const RIBBON_DEFS={
     {items:[
       {icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="12" height="14" rx="1"/><path d="M5 5h6M5 8h6M5 11h4"/></svg>',label:"Terms",fn:"switchDTab('lc',null)",dimIf:()=>!activeCont},
       {icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>',label:"Milestones",fn:"switchDTab('lc',null)",dimIf:()=>!activeCont},
-      {icon:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5h10M3 8h7M3 11h5"/></svg>',label:"Documents",fn:"switchDTab('lc',null)",dimIf:()=>!activeCont},
     ]},
     {sep:true},
     {items:[
@@ -440,8 +439,8 @@ function filterSt(s,btn){
 }
 function setView(m,btn){
   viewMode=m;
-  document.querySelectorAll(".rtab").forEach(t=>t.classList.remove("on-market"));
-  if(m==="market"){const mt=document.getElementById("tab-market");if(mt)mt.classList.add("on-market");}
+  const sbMp=document.getElementById("sb-marketplace");
+  if(sbMp)sbMp.classList.toggle("on",m==="market");
   document.getElementById("v-cards").classList.toggle("on",m==="cards");
   document.getElementById("v-timeline").classList.toggle("on",m==="timeline");
   renderView();
@@ -865,19 +864,6 @@ function repShowDetail(actorUid){
 }
 
 // ═══════════════════════════════════════════════════════════════
-
-
-
-// v23: open Backstage directly to a given section
-function openBackstage(sectionId){
-  const bs=document.getElementById("backstage");
-  if(!bs)return;
-  bs.classList.add("open");
-  if(typeof showBsSection==="function"){
-    const btn=document.getElementById("bsn-"+(sectionId||"new"));
-    showBsSection(sectionId||"new",btn);
-  }
-}
 
 // Update status bar market chip with current alert count
 function refreshMarketChip(){
@@ -1529,6 +1515,47 @@ function l4StartTimers(){
   l4TickTimerElements();
   l4TimerInterval=setInterval(l4TickTimerElements,1000);
 }
+function l4FmtUsdKg(n){
+  if(n==null||n==="")return null;
+  const x=Number(n);
+  return isNaN(x)?null:x.toFixed(2);
+}
+function l4FirstBidAmount(L){return L.bidHistory&&L.bidHistory.length?L.bidHistory[0].amount:null;}
+function l4LastBidAmount(L){return L.bidHistory&&L.bidHistory.length?L.bidHistory[L.bidHistory.length-1].amount:null;}
+/** Reserve / opening / current (or IOI·RFQ equivalents) under the marketplace countdown. */
+function l4ListingMarketPriceStrip(L){
+  const cell=function(label,val,accent,sub){
+    return`<div class="l4-card-price-cell${accent?" l4-card-price-cell--accent":""}"><div class="l4-card-price-lbl">${label}</div><div class="l4-card-price-val">${val}</div>${sub?`<div class="l4-card-price-sub">${sub}</div>`:""}</div>`;
+  };
+  const t=L.type;
+  if(t==="ENG"){
+    const res=l4FmtUsdKg(L.reserveUSDkg);
+    const op=l4FirstBidAmount(L);
+    const cur=l4FmtUsdKg(L.currentUSDkg);
+    return`<div class="l4-card-prices l4-card-prices--3">${cell("Reserve",res?res+" USD/kg":"—",false,"Seller floor")}${cell("Opening bid",op!=null?Number(op).toFixed(2)+" USD/kg":"—",false,(L.bids||0)?"First recorded bid":"No bids yet")}${cell("Current high",cur?cur+" USD/kg":"—",true,"Leading bid")}</div>`;
+  }
+  if(t==="SEALED"){
+    const res=l4FmtUsdKg(L.reserveUSDkg);
+    return`<div class="l4-card-prices l4-card-prices--2">${cell("Reserve",res?res+" USD/kg":"Not disclosed",false,"Seller floor · bids stay blind")}${cell("Sealed bids",(L.bidsReceived||L.sealedBids||0)+" lodged",true,"Amounts hidden until close")}</div>`;
+  }
+  if(t==="REV"){
+    const ceil=l4FmtUsdKg(L.ceilingUSDkg);
+    const op=l4FirstBidAmount(L);
+    const low=l4FmtUsdKg(L.currentLowUSDkg);
+    return`<div class="l4-card-prices l4-card-prices--3">${cell("Ceiling",ceil?ceil+" USD/kg":"—",false,"Buyer max")}${cell("Opening offer",op!=null?Number(op).toFixed(2)+" USD/kg":"—",false,"First seller quote")}${cell("Current low",low?low+" USD/kg":"—",true,"Best price to buyer")}</div>`;
+  }
+  if(t==="IOI"){
+    const ask=l4FmtUsdKg(L.priceUSDkg);
+    return`<div class="l4-card-prices l4-card-prices--2">${cell("List ask",ask?ask+" USD/kg":"—",true,"Fixed indication")}${cell("Interest",(L.bids||0)+" parties",false,"Non-binding IOI")}</div>`;
+  }
+  if(t==="RFQ"){
+    const op=l4FirstBidAmount(L);
+    const best=l4LastBidAmount(L);
+    const basis=L.differential||"—";
+    return`<div class="l4-card-prices l4-card-prices--3">${cell("Price basis",basis,false,"Quote format")}${cell("Opening quote",op!=null?Number(op).toFixed(2)+" USD/kg":"—",false,"First offer")}${cell("Best quote",best!=null?Number(best).toFixed(2)+" USD/kg":"—",true,(L.offers||0)+" offers in")}</div>`;
+  }
+  return"";
+}
 
 const L4_MARKET_AUCTION_TYPES=["ENG","SEALED","REV"];
 const L4_MARKET_OTHER_TYPES=["IOI","RFQ"];
@@ -1540,17 +1567,19 @@ function l4MarketListingCard(id,L){
   const activity=isSealed?(L.sealedBids+" sealed (blind)"):(L.bids!==undefined?(L.bids+" bids"):(L.offers!==undefined?(L.offers+" offers"):"—"));
   const action=L.type==="REV"||L.type==="RFQ"?"Submit Offer":(L.type==="IOI"?"Express Interest":"Place Bid");
   const counter=L.lot?("Lot "+L.lot+(L.lot&&CONTAINERS.find(x=>x.exp===L.lot||x.id===L.lot)?' <span style="background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:700;letter-spacing:.05em;margin-left:4px">LISTED</span>':"")):(L.buyerCompany||"Buyer-side spec");
-  const isAuction=L.type==="ENG"||L.type==="SEALED"||L.type==="REV";
-  const showTimerCard=isAuction&&L.endsAt&&(L.state==="LIVE"||L.state==="ENGAGED");
-  const cdEyebrow=L.type==="SEALED"?"Sealed auction":L.type==="ENG"?"English auction":"Reverse auction";
-  const countdownBand=showTimerCard?`<div class="l4-card-countdown" role="timer" aria-live="polite"><div class="l4-card-countdown__eyebrow">${cdEyebrow} · closes in</div><div class="l4-card-countdown__value"><span class="l4-timer" data-l4-timer="${L.endsAt}">${l4FmtTimer(L.endsAt-Date.now())}</span></div><div class="l4-card-countdown__sub">Demo clock${L.ends?" · "+L.ends:""}</div></div>`:"";
+  const showTimerCard=!!L.endsAt&&(L.state==="LIVE"||L.state==="ENGAGED");
+  const priceStripHtml=l4ListingMarketPriceStrip(L);
+  const showPriceStrip=showTimerCard&&priceStripHtml;
+  const cdEyebrow=L.type==="SEALED"?"Sealed auction":L.type==="ENG"?"English auction":L.type==="REV"?"Reverse auction":L.type==="RFQ"?"Request for quotes":L.type==="IOI"?"Indication of interest":"Closing window";
+  const countdownBand=showTimerCard?`<div class="l4-card-countdown" role="timer" aria-live="polite"><div class="l4-card-countdown__eyebrow">${cdEyebrow} · closes in</div><div class="l4-card-countdown__value"><span class="l4-timer" data-l4-timer="${L.endsAt}">${l4FmtTimer(L.endsAt-Date.now())}</span></div><div class="l4-card-countdown__sub">Demo clock${L.ends?" · "+L.ends:""}</div>${priceStripHtml}</div>`:"";
   const metaLine=showTimerCard?`<div class="l4-card-meta">${L.eudr?"<b class=\"l4-card-meta__eudr\">EUDR ✓</b> · ":""}<span class="l4-card-meta__vis">${L.visibility.join(" · ")}</span></div>`:`<div style="font-size:10px;color:var(--tx3);margin-top:3px">Closes ${L.ends||"—"} · ${L.eudr?"EUDR ✓ · ":""}${L.visibility.join(" + ")}</div>`;
+  const rowPriceSpan=showPriceStrip?"":`<span class="cc-eta">${priceLine}</span>`;
   return`<div class="cc l4-listing-card" style="border-left:3px solid #7C3AED">
       <div class="cc-head"><div style="display:flex;align-items:center;gap:6px">${muid(id)}<span style="font-size:9px;color:var(--tx3)">${LISTING_TYPE_LABEL[L.type]}</span></div><span style="background:${c};color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;font-size:9px;letter-spacing:.05em">${L.state}</span></div>
       ${countdownBand}
       <div class="cc-mid">
         <div class="cc-grade">${L.grade}</div>
-        <div class="cc-row"><span class="cc-w">${(L.weight/1000).toFixed(1)}t</span><span class="cc-eta">${priceLine}</span>${L.quality?`<span class="cc-sca">${L.quality}</span>`:""}</div>
+        <div class="cc-row"><span class="cc-w">${(L.weight/1000).toFixed(1)}t</span>${rowPriceSpan}${L.quality?`<span class="cc-sca">${L.quality}</span>`:""}</div>
         <div style="font-size:10px;color:var(--tx3);margin-top:6px">${counter} · ${activity}</div>${L.failReason?`<div style="font-size:10px;color:#c44;margin-top:3px;font-weight:600">⚠ ${L.failReason}</div>`:""}
         ${metaLine}
         ${L.type==="ENG"&&L.minIncrementUSD?`<div style="font-size:9px;color:#7C3AED;margin-top:3px">Min increment ${L.minIncrementUSD} USD/kg · Anti-snipe ${L.antiSnipingMin}min ext (cap ${L.hardCapMin}min)</div>`:""}
@@ -1779,8 +1808,8 @@ function l4Publish(){
   const closeAt=L4_NEW.closeAt||todayClose17EAT().getTime();
   const delivery=DELIVERY_LOCATIONS.find(d=>d.id===L4_NEW.delivery);
   const obj={type:L4_NEW.mech,state:"LIVE",lot:L4_NEW.lotId||null,weight:parseInt(L4_NEW.weight)||10000,grade:L4_NEW.grade||"User Listing",priceMode:"Outright",priceUSDkg:parseFloat(L4_NEW.price)||0,currency:L4_NEW.currency,delivery:delivery?delivery.label:"—",incoterm:delivery?delivery.label:"—",duration:"—",endsAt:closeAt,ends:fmtEAT(new Date(closeAt)),visibility:L4_NEW.vis.length?L4_NEW.vis.map(v=>L4_VIS.find(x=>x.id===v).label):["Open Market"],invitees:L4_NEW.invitees.slice(),ratingMin:L4_NEW.ratingMin,bids:0,quality:L4_NEW.minSCA?("Required: "+L4_NEW.minSCA):"Unsampled",eudr:false,note:"Created via marketplace wizard. Quality binding: "+L4_QBIND.find(q=>q.id===L4_NEW.qbind).label+(L4_NEW.invitees.length?". "+L4_NEW.invitees.length+" invitees.":".")};
-  if(L4_NEW.mech==="ENG"){obj.minIncrementUSD=parseFloat(L4_NEW.minInc)||0.05;obj.antiSnipingMin=parseInt(L4_NEW.antiSnipe)||5;obj.hardCapMin=parseInt(L4_NEW.hardCap)||30;obj.bidHistory=[];}
-  if(L4_NEW.mech==="SEALED"){obj.sealedBids=0;}
+  if(L4_NEW.mech==="ENG"){const rp=parseFloat(L4_NEW.price)||0;obj.reserveUSDkg=rp;obj.currentUSDkg=rp;obj.minIncrementUSD=parseFloat(L4_NEW.minInc)||0.05;obj.antiSnipingMin=parseInt(L4_NEW.antiSnipe)||5;obj.hardCapMin=parseInt(L4_NEW.hardCap)||30;obj.bidHistory=[];}
+  if(L4_NEW.mech==="SEALED"){obj.sealedBids=0;const sr=parseFloat(L4_NEW.price)||0;if(sr)obj.reserveUSDkg=sr;}
   LISTINGS[newId]=obj;
   if(L4_NEW.lotId){const c=CONTAINERS.find(x=>x.id===L4_NEW.lotId);if(c)c.listed=newId;}
   closeL4Wiz();
@@ -1896,9 +1925,10 @@ function openDetail(id){
   document.getElementById("d-sub").innerHTML=`${muid(c.exp)} · ${exp.city} · ${(c.kg/1000).toFixed(1)}t · ${muid(c.zone)}`;
   renderStepper(c);
   document.getElementById("detail").classList.add("open");
-  // QAT title update
-  document.getElementById("qat-title").textContent=`${c.id} — ${c.grade} · ${STATUS_LABELS[c.status]}`;
-  document.getElementById("sb-crumb").textContent=`Portfolio / ${c.id} — ${c.grade}`;
+  const qatTitle=document.getElementById("qat-title");
+  if(qatTitle)qatTitle.textContent=`${c.id} — ${c.grade} · ${STATUS_LABELS[c.status]}`;
+  const sbCrumb=document.getElementById("sb-crumb");
+  if(sbCrumb)sbCrumb.textContent=`Portfolio / ${c.id} — ${c.grade}`;
   // Reset detail tabs
   activeTab="overview";
   document.querySelectorAll(".dtab").forEach((t,i)=>t.classList.toggle("active",i===0));
@@ -1910,8 +1940,10 @@ function closeDetail(){
   dpTraceInlineFor=null;  // v22.2: clear inline trace state
   document.getElementById("detail").classList.remove("open");
   activeCont=null;
-  document.getElementById("qat-title").textContent="Portfolio — Kaffa Trading PLC";
-  document.getElementById("sb-crumb").textContent="Ankuaru · Portfolio — Kaffa Trading PLC";
+  const qatTitle=document.getElementById("qat-title");
+  if(qatTitle)qatTitle.textContent="Portfolio — Kaffa Trading PLC";
+  const sbCrumb=document.getElementById("sb-crumb");
+  if(sbCrumb)sbCrumb.textContent="Ankuaru · Portfolio — Kaffa Trading PLC";
   updateContextTabs();
   renderView();
 }
@@ -2394,6 +2426,8 @@ function renderOrigin(c){
 const CAT_COLORS={contract:"var(--dark)",lc:"#1E40AF",shipping:"#065F46",payment:"var(--amber)"};
 let msPopHoverTimer=null;
 function scheduleCloseMsPop(){
+  const pop=document.getElementById("ms-pop");
+  if(pop&&pop.classList.contains("open"))return;
   clearTimeout(msPopHoverTimer);
   msPopHoverTimer=setTimeout(function(){closeMsPop();},220);
 }
@@ -2434,7 +2468,7 @@ function closeMsPop(){
   cancelCloseMsPop();
   const pop=document.getElementById("ms-pop");
   if(pop){
-    pop.classList.remove("show","ms-pop--hint");
+    pop.classList.remove("show","ms-pop--hint","open");
     pop.style.left="";
     pop.style.top="";
   }
@@ -2451,8 +2485,12 @@ function msPopOpenAsModal(){
 }
 document.addEventListener("click",function(e){
   const pop=document.getElementById("ms-pop");
-  if(!pop||!pop.classList.contains("show")||!pop.classList.contains("ms-pop--hint"))return;
-  if(e.target.closest("#ms-pop")||e.target.closest(".tlrow .ms"))return;
+  if(!pop)return;
+  const isHint=pop.classList.contains("show")&&pop.classList.contains("ms-pop--hint");
+  const isModal=pop.classList.contains("open");
+  if(!isHint&&!isModal)return;
+  if(e.target.closest("#ms-pop"))return;
+  if(isHint&&e.target.closest(".tlrow .ms"))return;
   closeMsPop();
 });
 
@@ -2484,25 +2522,103 @@ function renderNotifPanel(){
 }
 
 // ══════════════════════════════════════════════════ BACKSTAGE ════
-function openBackstage(section="new"){const _ov=document.getElementById("backstage-ov");if(_ov&&_ov.classList.contains("open")){closeBackstage();return;}
-  const ov=document.getElementById("backstage-ov");
-  if(ov&&ov.classList.contains("open")&&section==="new"){closeBackstage();return;}
-    bsOpen=true;
-  document.getElementById("backstage").classList.add("open");
-  showBsSection(section,document.getElementById("bsn-"+section));
-
-  bsOpen=true;
-  document.getElementById("backstage").classList.add("open");
-  showBsSection(section,document.getElementById("bsn-"+section));
+function relocateQatBrandToSidebar(){
+  const root=document.getElementById("qat-brand-root");
+  const slot=document.getElementById("bs-brand-slot");
+  if(root&&slot&&root.parentElement!==slot)slot.appendChild(root);
 }
-function closeBackstage(){
+function toggleBsImporterNav(){
+  const st=document.getElementById("backstage");
+  if(!st)return;
+  st.classList.toggle("backstage--nav-collapsed");
+  const collapsed=st.classList.contains("backstage--nav-collapsed");
+  const reveal=document.getElementById("bs-rail-expand");
+  if(reveal)reveal.hidden=!collapsed;
+  const tg=document.getElementById("bs-nav-toggle");
+  if(tg){
+    tg.setAttribute("aria-expanded",collapsed?"false":"true");
+    tg.title=collapsed?"Show importer menu":"Hide importer menu";
+  }
+}
+function toggleExpPortfolioSidebar(){
+  const ab=document.querySelector(".app-body");
+  const tg=document.getElementById("exp-sidebar-toggle");
+  if(!ab)return;
+  ab.classList.toggle("app-body--exp-collapsed");
+  const c=ab.classList.contains("app-body--exp-collapsed");
+  if(tg){
+    tg.setAttribute("aria-expanded",c?"false":"true");
+    tg.title=c?"Show exporters list":"Hide exporters list";
+    tg.textContent=c?"»":"⟨";
+  }
+}
+function setPortfolioWelcomeVisible(on){
+  const w=document.getElementById("portfolio-welcome");
+  if(!w)return;
+  w.hidden=!on;
+}
+function setExportersSidebarVisible(on){
+  const sb=document.getElementById("exporters-sidebar");
+  const rail=document.getElementById("exp-sidebar-rail");
+  const ab=document.querySelector(".app-body");
+  const tg=document.getElementById("exp-sidebar-toggle");
+  if(!sb)return;
+  sb.hidden=!on;
+  if(rail)rail.hidden=!on;
+  if(on&&ab)ab.classList.remove("app-body--exp-collapsed");
+  if(tg&&on){
+    tg.setAttribute("aria-expanded","true");
+    tg.title="Hide exporters list";
+    tg.textContent="⟨";
+  }
+}
+function showBsPortfolioPreview(){
   bsOpen=false;
-  document.getElementById("backstage").classList.remove("open");
+  document.querySelectorAll(".bs-navitem").forEach(function(b){b.classList.remove("on");});
+  const dyn=document.getElementById("bs-dynamic");
+  if(dyn){dyn.innerHTML="";dyn.hidden=true;}
+  setExportersSidebarVisible(false);
+  setPortfolioWelcomeVisible(true);
 }
+function openBackstage(section){
+  const bs=document.getElementById("backstage");
+  if(!bs)return;
+  bs.classList.add("open");
+  bs.classList.add("backstage--docked");
+  var sid=section;
+  if(sid==null||sid===""){showBsPortfolioPreview();return;}
+  if(sid==="portfolio"){showBsPortfolioPreview();return;}
+  var btn=document.getElementById("bsn-"+sid);
+  if(!btn){showBsPortfolioPreview();return;}
+  showBsSection(sid,btn);
+}
+function closeBackstage(){showBsPortfolioPreview();}
 function showBsSection(id,btn){
-  document.querySelectorAll(".bs-navitem").forEach(b=>b.classList.remove("on"));
+  const el=document.getElementById("bs-dynamic");
+  if(!el)return;
+  if(id==="portfolio"){showBsPortfolioPreview();return;}
+  if(id==="exporters"){
+    bsOpen=false;
+    el.innerHTML="";
+    el.hidden=true;
+    setPortfolioWelcomeVisible(false);
+    setExportersSidebarVisible(true);
+    document.querySelectorAll(".bs-navitem").forEach(function(b){b.classList.remove("on");});
+    if(btn)btn.classList.add("on");
+    const allBtn=document.getElementById("btn-all");
+    if(typeof filterExp==="function")filterExp(null,allBtn||null);
+    const homeTab=document.getElementById("tab-home");
+    if(typeof switchRTab==="function")switchRTab("home",homeTab||null);
+    const vCards=document.getElementById("v-cards");
+    if(typeof setView==="function"&&vCards)setView("cards",vCards);
+    return;
+  }
+  bsOpen=true;
+  setPortfolioWelcomeVisible(false);
+  setExportersSidebarVisible(false);
+  document.querySelectorAll(".bs-navitem").forEach(function(b){b.classList.remove("on");});
   if(btn)btn.classList.add("on");
-  const el=document.getElementById("bs-content");
+  el.hidden=false;
   if(id==="new"){el.innerHTML=renderBsNew();}
   else if(id==="open"){el.innerHTML=renderBsOpen();}
   else if(id==="export"){el.innerHTML=renderBsExport();}
@@ -2518,6 +2634,7 @@ function showBsSection(id,btn){
   else if(id==="insurance"){el.innerHTML=renderBsInsurance();}
   else if(id==="risk"){el.innerHTML=renderBsRisk();}
   else if(id==="help"){el.innerHTML=renderBsHelp();}
+  else{el.innerHTML="";showBsPortfolioPreview();}
 }
 
 
@@ -4233,7 +4350,6 @@ document.addEventListener("keydown",e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==="k"){e.preventDefault();document.getElementById("qat-search-input").focus();}
   if((e.ctrlKey||e.metaKey)&&e.key==="n"){e.preventDefault();openWizard();}
   if(!e.ctrlKey&&!e.metaKey&&e.key.toLowerCase()==="t"&&document.activeElement.tagName!=="INPUT"){setView(viewMode==="cards"?"timeline":"cards");}
-  if(e.key==="Escape"){const ov=document.getElementById("backstage-ov");if(ov&&ov.classList.contains("open"))closeBackstage();}
 });
 
 function toast(msg){
@@ -4244,9 +4360,11 @@ function toast(msg){
 }
 
 // ═══════════════════════════════════════════════════════ INIT ════
+relocateQatBrandToSidebar();
 renderView();
 renderRibbon();
 updateStatusBar();
+if(typeof showBsPortfolioPreview==="function")showBsPortfolioPreview();
 
 // Boot Risk layer (Layer 9) on page load
 setTimeout(function(){if(typeof bootRiskLayer==="function")bootRiskLayer();},100);
