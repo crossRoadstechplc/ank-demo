@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ankuaru — Importer Portal</title>
+<title>Ankuaru - Track and Trade</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 </head>
@@ -80,6 +80,7 @@
       <span style="font-size:10px;color:var(--tx3)">View:</span>
       <button class="tp on" id="v-cards" onclick="setView('cards',this)">Cards</button>
       <button class="tp" id="v-timeline" onclick="setView('timeline',this)">Timeline</button>
+      <button type="button" class="tp" id="v-fieldmap" onclick="openToolbarFieldMap()" title="Merged parcel field map — explore all demo plots (current shipment, no trace subject)" aria-label="Open field map">Field map</button>
       
     </div>
     <div class="view-area" id="view-area"></div>
@@ -244,7 +245,7 @@
       <div id="hrv-map-host" class="hrv-map-host"></div>
       <div id="hrv-map-summary" class="hrv-map-summary" hidden></div>
     </div>
-    <p class="hrv-map-foot">Simulated farm outlines around each pin — demo only, not survey geometry.</p>
+    <p class="hrv-map-foot">Focused view: ~300 merged demo parcels (adjacent atoms grouped into larger rectangles) plus one reserved grid cell for the trace parcel (same scale as a single atom, inset like neighbours). Narrow road bands. Street / Terrain / Satellite (default terrain). Demo only.</p>
   </div>
 </div>
 

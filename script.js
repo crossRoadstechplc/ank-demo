@@ -3526,7 +3526,7 @@ function buildTraceFarmParcelTip(tr,c,ll,farmId,hrvId,isSubject){
     subtitle:sub.join(" · "),
   });
 }
-function farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvId){
+function farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvId,heading){
   const farm=tr.nodes[subjectFarmId];
   const hrv=hrvId?tr.nodes[hrvId]:null;
   const zone=ZONES[c.zone];
@@ -3540,22 +3540,60 @@ function farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvId){
   const rows=[["Farmer / operator",farmMapEsc(owner)],["Farm UID",farmMapEsc(subjectFarmId||"—")]];
   if(hrvId)rows.push(["Harvest lot",farmMapEsc(hrvId)]);
   rows.push(["Plot size",farmMapEsc(String(haStr))+" ha"],["Woreda",farmMapEsc(wor?wor.name:"—")],["Kebele",farmMapEsc(keb)],["GPS",farmMapEsc(gps)]);
-  return'<div class="hrv-map-sum"><div class="hrv-map-sum-h">Subject farm — pinned summary</div><dl class="hrv-map-sum-dl">'+rows.map(([k,v])=>"<div><dt>"+farmMapEsc(k)+"</dt><dd>"+v+"</dd></div>").join("")+"</dl></div>";
+  const h=farmMapEsc(heading||"Trace parcel");
+  return'<div class="hrv-map-sum"><div class="hrv-map-sum-h">'+h+'</div><dl class="hrv-map-sum-dl">'+rows.map(([k,v])=>"<div><dt>"+farmMapEsc(k)+"</dt><dd>"+v+"</dd></div>").join("")+"</dl></div>";
 }
-function hrvMapAddStandardControls(map,legendHtml){
+function farmMapSyntheticParcelSummaryHTML(o){
+  const rows=[
+    ["Farmer / operator",farmMapEsc(o.owner)],
+    ["Plot UID",farmMapEsc(o.farmUid||"—")],
+    ["Zone",farmMapEsc(o.zoneName||"—")],
+    ["Woreda",farmMapEsc(o.woredaName||"—")+" · "+farmMapEsc(o.woredaUid||"—")],
+    ["Kebele",farmMapEsc(o.kebele||"—")],
+    ["GPS",farmMapEsc(o.lat)+"°N "+farmMapEsc(o.lng)+"°E"],
+    ["Plot area",farmMapEsc(o.areaSqm)+" m² ("+farmMapEsc(o.ha)+" ha)"],
+    ["Households",farmMapEsc(o.hh)],
+    ["Coffee trees (est.)",farmMapEsc(o.trees)],
+  ];
+  if(o.subtitle)rows.push(["Note",farmMapEsc(o.subtitle)]);
+  return'<div class="hrv-map-sum"><div class="hrv-map-sum-h">Demo adjacent plot</div><dl class="hrv-map-sum-dl">'+rows.map(([k,v])=>"<div><dt>"+farmMapEsc(k)+"</dt><dd>"+v+"</dd></div>").join("")+"</dl></div>";
+}
+function farmMapPolygonCentroid(latlngs){
+  let la=0,ln=0,n=latlngs.length;
+  if(!n)return null;
+  latlngs.forEach(p=>{ la+=p.lat; ln+=p.lng; });
+  return L.latLng(la/n,ln/n);
+}
+function farmMapSubjectLabelIcon(text){
+  const t=farmMapEsc(text||"Subject farm");
+  return L.divIcon({
+    className:"hrv-subject-farm-lbl-wrap",
+    html:'<span class="hrv-subject-farm-lbl">'+t+"</span>",
+    iconSize:[120,22],
+    iconAnchor:[60,22],
+  });
+}
+function hrvMapAddStandardControls(map,legendHtml,opts){
+  const o=opts&&typeof opts==="object"?opts:{};
   const osm=L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
-    maxZoom:19,
+    maxZoom:22,
+    maxNativeZoom:19,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   });
   const topo=L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",{
-    maxZoom:17,
+    maxZoom:22,
+    maxNativeZoom:17,
     attribution:'&copy; <a href="https://opentopomap.org/">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>), &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
   });
   const sat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{
-    maxZoom:19,
+    maxZoom:22,
+    maxNativeZoom:19,
     attribution:"Tiles &copy; Esri &mdash; Earthstar Geographics",
   });
-  osm.addTo(map);
+  const def=o.defaultLayer||(o.defaultSatellite?"satellite":"osm");
+  if(def==="topo"||def==="terrain")topo.addTo(map);
+  else if(def==="satellite"||def==="sat")sat.addTo(map);
+  else osm.addTo(map);
   L.control.layers({"Street (map)":osm,"Terrain (contours)":topo,"Satellite":sat},{},{collapsed:true,position:"topleft"}).addTo(map);
   L.control.scale({metric:true,imperial:false,maxWidth:150}).addTo(map);
   const Leg=L.Control.extend({
@@ -3568,63 +3606,220 @@ function hrvMapAddStandardControls(map,legendHtml){
   });
   (new Leg()).addTo(map);
 }
-function genNearbyDemoParcels(cLat,cLng,subjectKey,zone,woreda,wId,count,subjectExtentDeg){
-  const subE=subjectExtentDeg||0;
+function demoPlotRing(cx,cy,plotSeed,baseR){
+  const nv=5+(plotSeed%4);
+  const ring=[];
+  for(let i=0;i<=nv;i++){
+    const ang=(i/nv)*Math.PI*2+(plotSeed%360)*0.0089;
+    const jit=0.62+((plotSeed+i*883)%45)/100;
+    const r=baseR*jit;
+    ring.push([cx+r*Math.cos(ang),cy+r*Math.sin(ang)*1.07]);
+  }
+  return ring;
+}
+/** Slightly jittered axis-aligned parcel (common cadastre / GPS walk style). cx=lat, cy=lng */
+function surveyParcelRing(cx,cy,seed,hLat,wLng){
+  const j=n=>(((seed+n)*131)%11-5)/9200;
+  const hl=Math.max(1e-9,hLat*(1+j(0)));
+  const wl=Math.max(1e-9,wLng*(1+j(1)));
+  const ring=[
+    [cx-hl,cy-wl],[cx-hl,cy+wl],[cx+hl,cy+wl],[cx+hl,cy-wl],
+  ];
+  for(let t=0;t<4;t++){
+    ring[t]=[ring[t][0]+j(2+t)*hl*0.035,ring[t][1]+j(6+t)*wl*0.035];
+  }
+  ring.push([ring[0][0],ring[0][1]]);
+  return ring;
+}
+function surveyParcelHalfAxes(basePlotR,mul){
+  const hLat=basePlotR*mul*1.02;
+  const wLng=basePlotR*mul*1.16;
+  return{hLat,wLng};
+}
+function surveyRadialExtent(hLat,wLng){
+  return Math.hypot(hLat,wLng);
+}
+function cumRoadAxis(idx,step,gap,period){
+  let acc=0;
+  for(let i=0;i<idx;i++)acc+=step+((i+1)%period===0?gap:0);
+  return acc;
+}
+function farmPlotSizeMulFromHa(haStr,seed){
+  const ha=parseFloat(haStr);
+  if(isNaN(ha)||ha<=0)return 0.78+((seed%40)/100);
+  const t=Math.max(0.25,Math.min(6,ha));
+  const lo=Math.log(0.25),hi=Math.log(6);
+  const norm=(Math.log(t)-lo)/(hi-lo);
+  const mul=0.72+norm*0.38+((seed>>2)%25)/200;
+  return Math.max(0.62,Math.min(1.22,mul));
+}
+function demoNeighbourPlotSizeMul(subjectKey,r,c){
+  const s=strSeed(subjectKey+";cell"+r+","+c);
+  const u=(s%1000)/1000;
+  if(u<0.4)return 0.46+((s>>3)%44)/100;
+  if(u<0.72)return 0.82+((s>>5)%30)/100;
+  if(u<0.9)return 1.02+((s>>7)%24)/100;
+  return 1.24+((s>>9)%20)/100;
+}
+function shuffleRectSizes(seed){
+  const s=[[4,2],[3,2],[3,3],[2,3],[2,2],[3,1],[1,3],[2,1],[1,2],[1,1]];
+  for(let i=s.length-1;i>0;i--){
+    const j=strSeed(seed+"|sz"+i)%(i+1);
+    const t=s[i];s[i]=s[j];s[j]=t;
+  }
+  return s;
+}
+/** Merged rectangular parcels on an atom grid + roads; ~300 neighbours; trace = one atom (same inset as demos, no overlap). */
+function genMergedPlotFieldNeighbours(cLat,cLng,subjectKey,zone,woreda,wId,gridOpts){
+  const TARGET=300;
+  const reserveSubject=!(gridOpts&&gridOpts.reserveSubject===false);
+  const basePlotR=gridOpts&&gridOpts.basePlotR!=null?gridOpts.basePlotR:0.000073;
+  const NR=44;
+  const NC=52;
+  const SR=1;
+  const SC=1;
+  const subR0=20;
+  const subC0=24;
+  const ROWS_PERIOD=5;
+  const COLS_PERIOD=6;
+  const kiss=1.000002;
+  const hAtom=basePlotR*0.5;
+  const wAtom=basePlotR*0.56;
+  const stepLat=2*hAtom*kiss;
+  const stepLng=2*wAtom*kiss;
+  const roadGapLat=Math.max(stepLat*0.2,9e-8);
+  const roadGapLng=Math.max(stepLng*0.2,9e-8);
+  function roadAtom(r,c){
+    return((r+1)%ROWS_PERIOD===0)||((c+1)%COLS_PERIOD===0);
+  }
+  const used=[];
+  for(let r=0;r<NR;r++){
+    used[r]=[];
+    for(let c=0;c<NC;c++)used[r][c]=0;
+  }
+  if(reserveSubject){
+    for(let r=subR0;r<subR0+SR;r++)for(let c=subC0;c<subC0+SC;c++)used[r][c]=1;
+  }
+  function atomLat(r){
+    return cumRoadAxis(r,stepLat,roadGapLat,ROWS_PERIOD)-cumRoadAxis(subR0,stepLat,roadGapLat,ROWS_PERIOD);
+  }
+  function atomLng(c){
+    return cumRoadAxis(c,stepLng,roadGapLng,COLS_PERIOD)-cumRoadAxis(subC0,stepLng,roadGapLng,COLS_PERIOD);
+  }
+  function rectBoundsRaw(r0,c0,r1,c1){
+    let n=1e9,s=-1e9,w=1e9,e=-1e9;
+    for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+      const la=atomLat(r),ln=atomLng(c);
+      n=Math.min(n,la-hAtom);s=Math.max(s,la+hAtom);
+      w=Math.min(w,ln-wAtom);e=Math.max(e,ln+wAtom);
+    }
+    return{cx:(n+s)/2,cy:(w+e)/2,h:(s-n)/2,w:(e-w)/2};
+  }
+  const subB=rectBoundsRaw(subR0,subC0,subR0+SR-1,subC0+SC-1);
+  const dLat=cLat-subB.cx;
+  const dLng=cLng-subB.cy;
+  function finLat(r){return atomLat(r)+dLat;}
+  function finLng(c){return atomLng(c)+dLng;}
+  function finRectBounds(r0,c0,r1,c1){
+    let n=1e9,s=-1e9,w=1e9,e=-1e9;
+    for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+      const la=finLat(r),ln=finLng(c);
+      n=Math.min(n,la-hAtom);s=Math.max(s,la+hAtom);
+      w=Math.min(w,ln-wAtom);e=Math.max(e,ln+wAtom);
+    }
+    return{cx:(n+s)/2,cy:(w+e)/2,h:(s-n)/2,w:(e-w)/2};
+  }
+  const sizes=shuffleRectSizes(subjectKey+"|mrg");
+  const parcels=[];
+  function canPlace(r0,c0,rh,cw){
+    if(r0<0||c0<0||r0+rh>NR||c0+cw>NC)return false;
+    for(let r=r0;r<r0+rh;r++)for(let c=c0;c<c0+cw;c++){
+      if(used[r][c]!==0)return false;
+      if(roadAtom(r,c))return false;
+    }
+    return true;
+  }
+  function mark(r0,c0,rh,cw,v){
+    for(let r=r0;r<r0+rh;r++)for(let c=c0;c<c0+cw;c++)used[r][c]=v;
+  }
+  for(let r=0;r<NR;r++){
+    for(let c=0;c<NC;c++){
+      if(used[r][c]!==0||roadAtom(r,c))continue;
+      let placed=false;
+      for(let si=0;si<sizes.length&&!placed;si++){
+        const [rh,cw]=sizes[si];
+        if(canPlace(r,c,rh,cw)){
+          mark(r,c,rh,cw,2);
+          parcels.push({r0:r,c0:c,r1:r+rh-1,c1:c+cw-1});
+          placed=true;
+        }
+      }
+      if(!placed){
+        mark(r,c,1,1,2);
+        parcels.push({r0:r,c0:c,r1:r,c1:c});
+      }
+    }
+  }
+  const focusR=subR0+(SR-1)/2;
+  const focusC=subC0+(SC-1)/2;
   const out=[];
-  const scales=[];
-  for(let j=0;j<count;j++){
-    const sj=strSeed(subjectKey+"~"+j);
-    /* Varied parcel sizes (smaller than subject on average) */
-    scales[j]=0.38+(sj%58)/100;
-  }
-  let rNeiMax=0;
-  for(let j=0;j<count;j++){
-    const sid0="N"+(strSeed(subjectKey+"|"+j)%99999);
-    rNeiMax=Math.max(rNeiMax,maxFarmRingExtentDeg(sid0,scales[j]));
-  }
-  const gap=0.00011;
-  const sinHalf=Math.sin(Math.PI/count);
-  /* Min distance from subject origin to neighbour centre so adjacent neighbours do not overlap */
-  const chordMinD=sinHalf>1e-6?(2*rNeiMax+0.00018)/(2*sinHalf):subE+rNeiMax+gap;
-  for(let i=0;i<count;i++){
-    const sid="N"+(strSeed(subjectKey+"|"+i)%99999);
-    const seed=strSeed(subjectKey+"~"+i);
-    const angJ=(seed%180)/5200;
-    const ang=(Math.PI*2*i)/count+angJ;
-    const sc=scales[i];
-    const rThis=maxFarmRingExtentDeg(sid,sc);
-    const fromSubject=subE+gap+rThis;
-    const D=Math.max(fromSubject,chordMinD)+i*0.000018;
-    const nlat=cLat+D*Math.cos(ang);
-    const nlng=cLng+D*Math.sin(ang)*1.012;
-    const ha=(0.85+((seed%60))/100).toFixed(2);
-    const haN=parseFloat(ha);
-    const owner=FARMER_NAMES[(seed+i*5)%FARMER_NAMES.length];
-    const hh=3+((seed+i*7)%10);
-    const trees=(Math.round(haN*1520+seed%500)).toLocaleString();
-    const areaSqm=Math.round(haN*10000).toLocaleString();
-    const ring=randomFarmRing(nlat,nlng,sid,sc);
-    const tip=farmMapTooltipHTML({
+  let k=0;
+  for(let pi=0;pi<parcels.length&&k<TARGET;pi++){
+    const{r0,c0,r1,c1}=parcels[pi];
+    const area=(r1-r0+1)*(c1-c0+1);
+    const seed=strSeed(subjectKey+"|p"+r0+","+c0+","+r1+","+c1);
+    const mul=demoNeighbourPlotSizeMul(subjectKey,r0,c0)*(0.88+Math.min(area,9)*0.04);
+    const b=finRectBounds(r0,c0,r1,c1);
+    const ring=surveyParcelRing(b.cx,b.cy,seed+pi,b.h*0.995,b.w*0.995);
+    const haN=Math.max(0.12,Math.min(4.5,0.14+mul*0.22*Math.sqrt(area)+((seed%17)-8)/180));
+    const ha=haN.toFixed(2);
+    const haNv=parseFloat(ha);
+    const owner=FARMER_NAMES[(seed+k*5)%FARMER_NAMES.length];
+    const hh=2+((seed+k*7)%11);
+    const trees=(Math.round(haNv*1480+seed%480)).toLocaleString();
+    const areaSqm=Math.round(haNv*10000).toLocaleString();
+    const sid="SIM-PLOT-"+(21000+k);
+    const meta={
       isSubject:false,
       region:zone.region,
       zoneName:zone.name,
       woredaName:woreda.name||"—",
       woredaUid:wId||"—",
-      kebele:farmMapPickKebele(woreda,seed+i),
+      kebele:farmMapPickKebele(woreda,seed+k*3),
       owner,
-      farmUid:"SIM-"+sid,
+      farmUid:sid,
       hrvId:null,
-      lat:nlat.toFixed(4),
-      lng:nlng.toFixed(4),
+      lat:b.cx.toFixed(4),
+      lng:b.cy.toFixed(4),
       ha,
       trees:String(trees),
       hh:String(hh),
       areaSqm:String(areaSqm),
-      subtitle:"Neighbouring smallholder parcel (simulated for neighbourhood context).",
-    });
-    out.push({ring,tip});
+      subtitle:"Merged field parcel · access lanes between blocks (demo, not survey).",
+    };
+    out.push({ring,meta,gr:Math.floor((r0+r1)/2),gc:Math.floor((c0+c1)/2)});
+    k++;
   }
-  return out;
+  if(reserveSubject){
+    const subSeed=gridOpts&&gridOpts.subjectSeed!=null?gridOpts.subjectSeed:strSeed(subjectKey+"|trace");
+    const sb=finRectBounds(subR0,subC0,subR0+SR-1,subC0+SC-1);
+    const subInset=0.995;
+    const subRing=surveyParcelRing(sb.cx,sb.cy,subSeed,sb.h*subInset,sb.w*subInset);
+    const subExtent=farmRingRadialExtentFromCenter(sb.cx,sb.cy,subRing);
+    return{parcels:out,focusR,focusC,subRing,subExtent};
+  }
+  let minLa=1e9,maxLa=-1e9,minLn=1e9,maxLn=-1e9;
+  out.forEach(p=>{
+    p.ring.forEach(ll=>{
+      const la=ll[0],ln=ll[1];
+      if(typeof la==="number"&&typeof ln==="number"){
+        minLa=Math.min(minLa,la);maxLa=Math.max(maxLa,la);
+        minLn=Math.min(minLn,ln);maxLn=Math.max(maxLn,ln);
+      }
+    });
+  });
+  const span=Math.max(maxLa-minLa,maxLn-minLn,1e-7);
+  return{parcels:out,focusR,focusC,subRing:null,subExtent:Math.max(span*0.08,0.000015)};
 }
 function farmMapRedIcon(){
   return L.divIcon({
@@ -3675,13 +3870,22 @@ function closeHrvMapModal(){
   if(ov){ov.classList.remove("open");ov.setAttribute("aria-hidden","true");}
   if(_hrvMap){try{_hrvMap.remove();}catch(e){}_hrvMap=null;}
   if(host)host.innerHTML="";
-  if(sum){sum.innerHTML="";sum.setAttribute("hidden","");}
+  if(sum){sum.innerHTML="";sum.setAttribute("hidden","");sum.classList.remove("hrv-map-summary--float","hrv-map-summary--collapsed");}
 }
-function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
+function openToolbarFieldMap(){
+  if(!activeCont){toast("Open a shipment from the list first (cards or timeline)");return;}
+  const cc=CONTAINERS.find(x=>x.id===activeCont);
+  if(!cc){toast("Shipment not found");return;}
+  if(!TRACE_OK.includes(cc.status)){toast("Harvest map unlocks after dispatch");return;}
+  openHrvMapModal(activeCont,null,null,{exploreMergedField:true});
+}
+function openHrvMapModal(containerId, focusHrvId, focusFarmUid, mapOpts){
   if(typeof L==="undefined"){toast("Map library not loaded");return;}
   const c=CONTAINERS.find(x=>x.id===containerId);
   if(!c){toast("Shipment not found");return;}
   if(!TRACE_OK.includes(c.status)){toast("Harvest map unlocks after dispatch");return;}
+  const _mapOpts=mapOpts&&typeof mapOpts==="object"?mapOpts:{};
+  const exploreMerged=!!_mapOpts.exploreMergedField&&!focusHrvId&&!focusFarmUid;
   const tr=genTrace(c);
   const pts=[];
   Object.keys(tr.nodes).forEach(k=>{
@@ -3692,8 +3896,10 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
     pts.push({id:k,node,ll});
   });
   let show=pts.slice();
-  if(focusHrvId)show=pts.filter(p=>p.id===focusHrvId);
-  else if(focusFarmUid)show=pts.filter(p=>p.node.actor===focusFarmUid);
+  if(!exploreMerged){
+    if(focusHrvId)show=pts.filter(p=>p.id===focusHrvId);
+    else if(focusFarmUid)show=pts.filter(p=>p.node.actor===focusFarmUid);
+  }
   if((focusHrvId||focusFarmUid)&&!show.length){toast("Harvest location not found in trace");return;}
   const ov=document.getElementById("hrv-map-ov");
   const host=document.getElementById("hrv-map-host");
@@ -3703,10 +3909,13 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
   const ttOpts={sticky:true,direction:"auto",opacity:1,className:"farm-map-tt"};
   if(focusHrvId){
     document.getElementById("hrv-map-title").textContent=focusHrvId+" · farm neighbourhood";
-    sub.textContent="Initial view: subject parcel · zoom out or pan for grey neighbours · hover any polygon for metadata · "+(c.grade||"")+(exp?" · "+exp.short:"");
+    sub.textContent="Default terrain · Street / satellite in layer menu · merged parcels + roads · trace + ~300 demos · Bottom-left target icon centers the selection · "+(c.grade||"")+(exp?" · "+exp.short:"");
   }else if(focusFarmUid){
     document.getElementById("hrv-map-title").textContent=focusFarmUid+" · farm neighbourhood";
-    sub.textContent="Initial view: subject parcel · zoom out or pan for grey neighbours · hover parcels for details · "+(c.grade||"");
+    sub.textContent="Default terrain · Street / satellite in layer menu · merged parcels + roads · trace + ~300 demos · Bottom-left target icon centers the selection · "+(c.grade||"");
+  }else if(exploreMerged){
+    document.getElementById("hrv-map-title").textContent="Field map · "+c.id;
+    sub.textContent="Merged ~300 demo parcels (terrain default) · click any polygon to select · no trace subject · target icon recenters selection or full field · "+(show.length?show.length+" harvest anchor(s) · ":"")+(c.grade||"")+(exp?" · "+exp.short:"");
   }else{
     document.getElementById("hrv-map-title").textContent="All harvest batches · "+c.id;
     sub.textContent=show.length?`Hover parcels for woreda / household / plot data · ${show.length} batch(es) — ${c.grade||""} · ${exp?exp.short:"—"}`:"No harvest GPS in trace.";
@@ -3716,61 +3925,198 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
   host.innerHTML="";
   if(_hrvMap){try{_hrvMap.remove();}catch(e){}_hrvMap=null;}
   const sumPanel=document.getElementById("hrv-map-summary");
-  if(sumPanel){sumPanel.innerHTML="";sumPanel.setAttribute("hidden","");}
+  if(sumPanel){sumPanel.innerHTML="";sumPanel.setAttribute("hidden","");sumPanel.classList.remove("hrv-map-summary--float","hrv-map-summary--collapsed");}
   if(!show.length){
     host.innerHTML='<div class="hrv-map-empty">No harvest batches with map coordinates for this shipment.</div>';
     return;
   }
   setTimeout(()=>{
-    _hrvMap=L.map(host,{scrollWheelZoom:true,minZoom:5,maxZoom:19});
+    _hrvMap=L.map(host,{scrollWheelZoom:true,minZoom:3,maxZoom:22});
     const lg=L.layerGroup().addTo(_hrvMap);
-    const focused=!!(focusHrvId||focusFarmUid);
-    if(focused){
+    const focusedNeighbourhood=!!(focusHrvId||focusFarmUid);
+    const useMergedGrid=focusedNeighbourhood||exploreMerged;
+    if(useMergedGrid){
+      const polyGrey={color:"#78716c",weight:3,fillColor:"#a8a29e",fillOpacity:0.22,opacity:0.92};
+      const polyRed={color:"#b91c1c",weight:5,fillColor:"#fecaca",fillOpacity:0.4,opacity:1};
       const primary=show[0];
-      let subjectLl={...primary.ll};
-      let subjectFarmId=primary.node.actor;
-      if(focusFarmUid&&tr.nodes[focusFarmUid]){
-        const g=parseTraceGeo(tr.nodes[focusFarmUid].gps);
-        if(g){subjectLl=g;subjectFarmId=focusFarmUid;}
+      let subjectLl, subjectFarmId, wId, woreda, hrvForTip, subKey;
+      if(focusedNeighbourhood){
+        subjectLl={...primary.ll};
+        subjectFarmId=primary.node.actor;
+        if(focusFarmUid&&tr.nodes[focusFarmUid]){
+          const g=parseTraceGeo(tr.nodes[focusFarmUid].gps);
+          if(g){subjectLl=g;subjectFarmId=focusFarmUid;}
+        }
+        const farmNode=tr.nodes[subjectFarmId];
+        wId=(farmNode&&farmNode.wrdaId)||primary.node.wrdaId;
+        woreda=(zone&&wId&&zone.woredas[wId])||{name:"—"};
+        hrvForTip=focusHrvId||(show[0]&&show[0].id)||null;
+        subKey=focusHrvId||subjectFarmId||"sub";
+      }else{
+        let slat=0,slng=0,n=0;
+        show.forEach(p=>{slat+=p.ll.lat;slng+=p.ll.lng;n++;});
+        subjectLl={lat:slat/n,lng:slng/n};
+        subjectFarmId=primary.node.actor;
+        const farmNode2=tr.nodes[subjectFarmId];
+        wId=(farmNode2&&farmNode2.wrdaId)||primary.node.wrdaId;
+        woreda=(zone&&wId&&zone.woredas[wId])||{name:"—"};
+        hrvForTip=null;
+        subKey=c.id+"|fldExplore";
       }
-      const farmNode=tr.nodes[subjectFarmId];
-      const wId=(farmNode&&farmNode.wrdaId)||primary.node.wrdaId;
-      const woreda=(zone&&wId&&zone.woredas[wId])||{name:"—"};
-      const hrvForTip=focusHrvId||(show[0]&&show[0].id)||null;
-      const subKey=focusHrvId||subjectFarmId||"sub";
-      const subRing=randomFarmRing(subjectLl.lat,subjectLl.lng,subKey);
-      const subExtent=farmRingRadialExtentFromCenter(subjectLl.lat,subjectLl.lng,subRing);
-      const nearby=genNearbyDemoParcels(subjectLl.lat,subjectLl.lng,String(focusHrvId||focusFarmUid||subjectFarmId),zone,woreda,wId,6,subExtent);
+      const basePlotR=0.000073;
+      const subjectSeed=strSeed(String(subKey)+"|trace");
+      const farmLay=genMergedPlotFieldNeighbours(subjectLl.lat,subjectLl.lng,String(focusedNeighbourhood?(focusHrvId||focusFarmUid||subjectFarmId):subKey),zone,woreda,wId,{basePlotR,subjectSeed,reserveSubject: focusedNeighbourhood});
+      const nearby=farmLay.parcels;
+      const subRing=farmLay.subRing;
+      const subExtent=farmLay.subExtent;
+      const parcelLayers=[];
       nearby.forEach(n=>{
-        L.polygon(n.ring,{color:"#78716c",weight:1.5,fillColor:"#a8a29e",fillOpacity:0.2,opacity:0.95})
-          .bindTooltip(n.tip,ttOpts).addTo(lg);
+        const pl=L.polygon(n.ring,{...polyGrey,className:"hrv-parcel-poly",interactive:true}).addTo(lg);
+        pl._hrvParcel={kind:"synthetic",meta:n.meta};
+        parcelLayers.push(pl);
       });
-      const subTip=buildTraceFarmParcelTip(tr,c,subjectLl,subjectFarmId,hrvForTip,true);
-      L.polygon(subRing,{color:"#b91c1c",weight:2.5,fillColor:"#fecaca",fillOpacity:0.38,opacity:1})
-        .bindTooltip(subTip,ttOpts).addTo(lg);
-      L.marker([subjectLl.lat,subjectLl.lng],{icon:farmMapRedIcon(),zIndexOffset:500})
-        .bindTooltip("<div class=\"fmt-pin-tip\"><b>Subject</b><br>Harvest / farm anchor</div>",{...ttOpts,direction:"top"}).addTo(lg);
+      let tracePoly=null;
+      if(focusedNeighbourhood&&subRing){
+        tracePoly=L.polygon(subRing,{...polyRed,className:"hrv-parcel-poly",interactive:true}).addTo(lg);
+        tracePoly._hrvParcel={kind:"trace",tr,c,subjectLl:{...subjectLl},subjectFarmId,hrvId:hrvForTip};
+        parcelLayers.push(tracePoly);
+      }
+      let selectedParcelLayer=tracePoly||null;
+      let pin=null, labelMk=null;
+      if(focusedNeighbourhood){
+        pin=L.marker([subjectLl.lat,subjectLl.lng],{icon:farmMapRedIcon(),zIndexOffset:500,interactive:false}).addTo(lg);
+        const dLat0=Math.max(subExtent*1.15,0.000018);
+        labelMk=L.marker([subjectLl.lat+dLat0,subjectLl.lng],{
+          icon:farmMapSubjectLabelIcon("Trace parcel"),
+          interactive:false,
+          zIndexOffset:460,
+        }).addTo(lg);
+      }
       const dLat=Math.max(subExtent*1.15,0.000018);
-      L.marker([subjectLl.lat+dLat,subjectLl.lng],{
-        icon:L.divIcon({
-          className:"hrv-subject-farm-lbl-wrap",
-          html:'',
-          iconSize:[92,22],
-          iconAnchor:[46,22],
-        }),
-        interactive:false,
-        zIndexOffset:460,
-      }).addTo(lg);
-      if(sumPanel){
-        sumPanel.innerHTML=farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvForTip);
+      function wrapSummaryBody(inner){
+        return'<button type="button" class="hrv-sum-toggle" aria-expanded="true" title="Show or hide plot details">Plot details</button><div class="hrv-sum-body">'+inner+"</div>";
+      }
+      function setSummaryHtml(inner){
+        if(!sumPanel)return;
+        sumPanel.classList.remove("hrv-map-summary--collapsed");
+        sumPanel.innerHTML=wrapSummaryBody(inner);
+        const tb=sumPanel.querySelector(".hrv-sum-toggle");
+        if(tb)tb.setAttribute("aria-expanded","true");
+      }
+      if(sumPanel&&!sumPanel._hrvSumToggleBound){
+        sumPanel._hrvSumToggleBound=true;
+        sumPanel.addEventListener("click",ev=>{
+          const t=ev.target.closest(".hrv-sum-toggle");
+          if(!t||!sumPanel.contains(t))return;
+          ev.preventDefault();
+          const collapsed=sumPanel.classList.toggle("hrv-map-summary--collapsed");
+          t.setAttribute("aria-expanded",collapsed?"false":"true");
+        });
+      }
+      function selectParcelLayer(layer){
+        selectedParcelLayer=layer;
+        parcelLayers.forEach(pl=>pl.setStyle(pl===layer?polyRed:polyGrey));
+        const p=layer._hrvParcel;
+        if(!p||!sumPanel)return;
+        if(exploreMerged){
+          sumPanel.classList.add("hrv-map-summary--float");
+          sumPanel.removeAttribute("hidden");
+        }
+        if(p.kind==="trace"){
+          setSummaryHtml(farmMapFocusedSummaryHTML(p.tr,p.c,p.subjectLl,p.subjectFarmId,p.hrvId,"Trace parcel"));
+          if(pin&&labelMk){
+            pin.setLatLng([p.subjectLl.lat,p.subjectLl.lng]);
+            labelMk.setIcon(farmMapSubjectLabelIcon("Trace parcel"));
+            labelMk.setLatLng(L.latLng(p.subjectLl.lat+dLat,p.subjectLl.lng));
+          }
+        }else{
+          setSummaryHtml(farmMapSyntheticParcelSummaryHTML(p.meta));
+          const ring=layer.getLatLngs()[0];
+          const cen=farmMapPolygonCentroid(ring);
+          if(cen){
+            if(!pin){
+              const su0=(p.meta.farmUid||"").replace(/^SIM-PLOT-/,"#");
+              pin=L.marker([cen.lat,cen.lng],{icon:farmMapRedIcon(),zIndexOffset:500,interactive:false}).addTo(lg);
+              labelMk=L.marker([cen.lat+dLat*0.35,cen.lng],{
+                icon:farmMapSubjectLabelIcon(su0||"Demo plot"),
+                interactive:false,
+                zIndexOffset:460,
+              }).addTo(lg);
+            }else{
+              pin.setLatLng(cen);
+              const shortUid=(p.meta.farmUid||"").replace(/^SIM-PLOT-/,"#");
+              labelMk.setIcon(farmMapSubjectLabelIcon(shortUid||"Demo plot"));
+              labelMk.setLatLng(L.latLng(cen.lat+dLat*0.35,cen.lng));
+            }
+          }
+        }
+        layer.bringToFront();
+      }
+      parcelLayers.forEach(pl=>{
+        pl.on("click",ev=>{
+          L.DomEvent.stopPropagation(ev);
+          selectParcelLayer(pl);
+        });
+      });
+      if(tracePoly)tracePoly.bringToFront();
+      if(sumPanel&&focusedNeighbourhood){
+        sumPanel.classList.add("hrv-map-summary--float");
+        sumPanel.classList.remove("hrv-map-summary--collapsed");
+        setSummaryHtml(farmMapFocusedSummaryHTML(tr,c,subjectLl,subjectFarmId,hrvForTip,"Trace parcel"));
         sumPanel.removeAttribute("hidden");
       }
-      /* Frame only the subject parcel; neighbours stay on the map but may be cropped until zoom/pan */
-      const b=L.latLngBounds(subRing);
-      b.extend([subjectLl.lat,subjectLl.lng]);
-      _hrvMap.fitBounds(b.pad(0.04),{maxZoom:19,padding:[16,16]});
-      if(_hrvMap.getZoom()<15)_hrvMap.setZoom(15);
-      hrvMapAddStandardControls(_hrvMap,'<div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-subj"></span> Subject parcel</div><div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-nei"></span> Neighbouring holdings</div>');
+      const bInit=L.latLngBounds([]);
+      if(subRing)subRing.forEach(ll=>bInit.extend(ll));
+      else nearby.forEach(n=>n.ring.forEach(ll=>bInit.extend(ll)));
+      if(focusedNeighbourhood)bInit.extend([subjectLl.lat,subjectLl.lng]);
+      if(focusedNeighbourhood){
+        _hrvMap.fitBounds(bInit.pad(0.004),{maxZoom:22,paddingTopLeft:[8,8],paddingBottomRight:[100,36]});
+      }else{
+        _hrvMap.fitBounds(bInit.pad(0.16),{maxZoom:16,paddingTopLeft:[12,12],paddingBottomRight:[108,52]});
+      }
+      const HrvCenterCtrl=L.Control.extend({
+        options:{position:"bottomleft"},
+        onAdd:function(map){
+          const w=L.DomUtil.create("div","leaflet-bar leaflet-control hrv-map-center-ctl");
+          const a=L.DomUtil.create("a","hrv-map-center-btn",w);
+          a.href="#";
+          a.title=exploreMerged
+            ?"Center the map on the selected parcel, or on the full demo field if none is selected"
+            :"Center the map on the currently selected parcel (trace or demo plot)";
+          a.setAttribute("role","button");
+          a.setAttribute("aria-label","Center map on selection or field");
+          a.innerHTML='<svg class="hrv-map-center-svg" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3.25" fill="none" stroke="currentColor" stroke-width="2.25"/><path fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" d="M12 4.5V8M12 16v3.5M4.5 12H8M16 12h3.5"/></svg>';
+          L.DomEvent.on(a,"click",L.DomEvent.stopPropagation).on(a,"click",L.DomEvent.preventDefault).on(a,"click",()=>{
+            const lay=selectedParcelLayer;
+            if(lay&&typeof lay.getBounds==="function"){
+              const bb=lay.getBounds();
+              if(bb&&bb.isValid()){
+                map.fitBounds(bb.pad(0.06),{maxZoom:22,paddingTopLeft:[14,52],paddingBottomRight:[124,52]});
+                return;
+              }
+            }
+            if(exploreMerged){
+              const bb=L.latLngBounds([]);
+              parcelLayers.forEach(pl=>{
+                if(typeof pl.getBounds!=="function")return;
+                const b=pl.getBounds();
+                if(b&&b.isValid()){
+                  bb.extend(b.getSouthWest());
+                  bb.extend(b.getNorthEast());
+                }
+              });
+              if(bb.isValid())map.fitBounds(bb.pad(0.12),{maxZoom:16,paddingTopLeft:[14,52],paddingBottomRight:[124,52]});
+            }
+          });
+          L.DomEvent.disableClickPropagation(w);
+          return w;
+        },
+      });
+      const legHtml=exploreMerged
+        ?'<div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-subj"></span> Selected parcel</div><div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-nei"></span> Demo plots (~300) · tap to explore</div>'
+        :'<div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-subj"></span> Selected parcel</div><div class="hrv-leg-row"><span class="hrv-leg-swatch hrv-leg-nei"></span> Other plots (~300 demo)</div>';
+      hrvMapAddStandardControls(_hrvMap,legHtml,{defaultLayer:"topo"});
+      (new HrvCenterCtrl()).addTo(_hrvMap);
     }else{
       const rings=[];
       show.forEach(p=>{
