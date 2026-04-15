@@ -439,7 +439,6 @@ function filterSt(s,btn){
   renderView();
 }
 function setView(m,btn){
-  if(viewMode==="market"&&m!=="market"&&l4TimerInterval){clearInterval(l4TimerInterval);l4TimerInterval=null;}
   viewMode=m;
   document.querySelectorAll(".rtab").forEach(t=>t.classList.remove("on-market"));
   if(m==="market"){const mt=document.getElementById("tab-market");if(mt)mt.classList.add("on-market");}
@@ -473,8 +472,16 @@ function renderFilteredView(fl){
 /* L4 INJECT */
 // Bake live end timestamps + LISTED lot mapping (v12)
 (function(){
-  const off={"LIST-IOI-0042":14*864e5,"LIST-RFQ-0118":7*864e5,"LIST-ENG-0007":3*864e5+45*6e4,"LIST-SEL-0019":10*864e5,"LIST-REV-0003":6*864e5,"LIST-ENG-0042":4*864e5+3*36e5};
-  for(const k in off){if(LISTINGS[k])LISTINGS[k].endsAt=Date.now()+off[k];}
+  const M=6e4,H=60*M,D=24*H;
+  const demoEnds={
+    "LIST-ENG-0007":30*M,
+    "LIST-ENG-0042":28*M,
+    "LIST-SEL-0019":D+5*H,
+    "LIST-REV-0003":2*H+40*M,
+    "LIST-IOI-0042":3*D,
+    "LIST-RFQ-0118":6*D+12*H,
+  };
+  for(const k in demoEnds){if(LISTINGS[k])LISTINGS[k].endsAt=Date.now()+demoEnds[k];}
   // Mark referenced lots as LISTED
   for(const k in LISTINGS){const L=LISTINGS[k];if(L.lot&&L.state==="LIVE"){const c=CONTAINERS.find(x=>x.exp===L.lot||x.id===L.lot);if(c)c.listed=k;}}
   // English auction config
@@ -1503,42 +1510,49 @@ function l4CheckExpiry(){
 setInterval(l4CheckExpiry,3000);
 /*L4_TIMER*/
 function l4FmtTimer(ms){
-  if(ms<=0)return"<span style=\"color:#a04040\">CLOSED</span>";
+  if(ms<=0)return'<span class="l4-tick l4-tick--closed">CLOSED</span>';
   const d=Math.floor(ms/864e5),h=Math.floor((ms%864e5)/36e5),m=Math.floor((ms%36e5)/6e4),s=Math.floor((ms%6e4)/1e3);
-  if(d>0)return `${d}d ${h}h ${m}m`;
-  if(h>0)return `<span style="color:#a04040;font-weight:700">${h}h ${m}m ${s}s</span>`;
-  return `<span style="color:#a04040;font-weight:700;font-family:monospace">${m}m ${s}s</span>`;
+  if(d>0)return`<span class="l4-tick l4-tick--days">${d}d ${h}h ${m}m</span>`;
+  if(h>0)return`<span class="l4-tick l4-tick--hours">${h}h ${m}m ${s}s</span>`;
+  return`<span class="l4-tick l4-tick--mins">${m}<span class="l4-tick__unit">m</span> ${String(s).padStart(2,"0")}<span class="l4-tick__unit">s</span></span>`;
 }
 let l4TimerInterval=null;
+function l4TickTimerElements(){
+  document.querySelectorAll("[data-l4-timer]").forEach(el=>{
+    const t=parseInt(el.getAttribute("data-l4-timer"),10);
+    if(isNaN(t))return;
+    el.innerHTML=l4FmtTimer(t-Date.now());
+  });
+}
 function l4StartTimers(){
   if(l4TimerInterval)clearInterval(l4TimerInterval);
-  l4TimerInterval=setInterval(()=>{
-    if(viewMode!=="market"){clearInterval(l4TimerInterval);l4TimerInterval=null;return;}
-    document.querySelectorAll("[data-l4-timer]").forEach(el=>{
-      const t=parseInt(el.getAttribute("data-l4-timer"));
-      el.innerHTML=l4FmtTimer(t-Date.now());
-    });
-  },1000);
+  l4TickTimerElements();
+  l4TimerInterval=setInterval(l4TickTimerElements,1000);
 }
 
-function renderMarket(){
-  const liveListings=Object.entries(LISTINGS);
-  const tiles=L4_MECH.map(m=>{const n=liveListings.filter(([,L])=>L.type===m.id&&L.state==="LIVE").length;return`<div style="background:#fff;border:1px solid #e5dccc;border-radius:6px;padding:12px;text-align:center"><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em">${m.label}</div><div style="font-size:24px;font-weight:700;color:#7C3AED;margin-top:2px">${n}</div><div style="font-size:10px;color:var(--tx3)">live</div></div>`;}).join("");
-  const cards=liveListings.map(([id,L])=>{
-    const c=LISTING_STATE_COLOR[L.state]||"#666";
-    const isSealed=L.type==="SEALED";
-    const priceLine=L.priceUSDkg?(L.priceUSDkg+" USD/kg"):(isSealed?"<span style=\"color:#666\">Bids hidden</span>":(L.currentUSDkg?("Current "+L.currentUSDkg+" USD/kg"):(L.differential||(L.ceilingUSDkg?("Ceiling "+L.ceilingUSDkg):(L.currentLowUSDkg?("Low "+L.currentLowUSDkg):"—")))));
-    const activity=isSealed?(L.sealedBids+" sealed (blind)"):(L.bids!==undefined?(L.bids+" bids"):(L.offers!==undefined?(L.offers+" offers"):"—"));
-    const action=L.type==="REV"||L.type==="RFQ"?"Submit Offer":(L.type==="IOI"?"Express Interest":"Place Bid");
-    const counter=L.lot?("Lot "+L.lot+(L.lot&&CONTAINERS.find(x=>x.exp===L.lot||x.id===L.lot)?' <span style="background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:700;letter-spacing:.05em;margin-left:4px">LISTED</span>':"")):(L.buyerCompany||"Buyer-side spec");
-    const timer=L.endsAt?`<span data-l4-timer="${L.endsAt}">${l4FmtTimer(L.endsAt-Date.now())}</span>`:L.ends;
-    return`<div class="cc" style="border-left:3px solid #7C3AED">
+const L4_MARKET_AUCTION_TYPES=["ENG","SEALED","REV"];
+const L4_MARKET_OTHER_TYPES=["IOI","RFQ"];
+
+function l4MarketListingCard(id,L){
+  const c=LISTING_STATE_COLOR[L.state]||"#666";
+  const isSealed=L.type==="SEALED";
+  const priceLine=L.priceUSDkg?(L.priceUSDkg+" USD/kg"):(isSealed?"<span style=\"color:#666\">Bids hidden</span>":(L.currentUSDkg?("Current "+L.currentUSDkg+" USD/kg"):(L.differential||(L.ceilingUSDkg?("Ceiling "+L.ceilingUSDkg):(L.currentLowUSDkg?("Low "+L.currentLowUSDkg):"—")))));
+  const activity=isSealed?(L.sealedBids+" sealed (blind)"):(L.bids!==undefined?(L.bids+" bids"):(L.offers!==undefined?(L.offers+" offers"):"—"));
+  const action=L.type==="REV"||L.type==="RFQ"?"Submit Offer":(L.type==="IOI"?"Express Interest":"Place Bid");
+  const counter=L.lot?("Lot "+L.lot+(L.lot&&CONTAINERS.find(x=>x.exp===L.lot||x.id===L.lot)?' <span style="background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:700;letter-spacing:.05em;margin-left:4px">LISTED</span>':"")):(L.buyerCompany||"Buyer-side spec");
+  const isAuction=L.type==="ENG"||L.type==="SEALED"||L.type==="REV";
+  const showTimerCard=isAuction&&L.endsAt&&(L.state==="LIVE"||L.state==="ENGAGED");
+  const cdEyebrow=L.type==="SEALED"?"Sealed auction":L.type==="ENG"?"English auction":"Reverse auction";
+  const countdownBand=showTimerCard?`<div class="l4-card-countdown" role="timer" aria-live="polite"><div class="l4-card-countdown__eyebrow">${cdEyebrow} · closes in</div><div class="l4-card-countdown__value"><span class="l4-timer" data-l4-timer="${L.endsAt}">${l4FmtTimer(L.endsAt-Date.now())}</span></div><div class="l4-card-countdown__sub">Demo clock${L.ends?" · "+L.ends:""}</div></div>`:"";
+  const metaLine=showTimerCard?`<div class="l4-card-meta">${L.eudr?"<b class=\"l4-card-meta__eudr\">EUDR ✓</b> · ":""}<span class="l4-card-meta__vis">${L.visibility.join(" · ")}</span></div>`:`<div style="font-size:10px;color:var(--tx3);margin-top:3px">Closes ${L.ends||"—"} · ${L.eudr?"EUDR ✓ · ":""}${L.visibility.join(" + ")}</div>`;
+  return`<div class="cc l4-listing-card" style="border-left:3px solid #7C3AED">
       <div class="cc-head"><div style="display:flex;align-items:center;gap:6px">${muid(id)}<span style="font-size:9px;color:var(--tx3)">${LISTING_TYPE_LABEL[L.type]}</span></div><span style="background:${c};color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;font-size:9px;letter-spacing:.05em">${L.state}</span></div>
+      ${countdownBand}
       <div class="cc-mid">
         <div class="cc-grade">${L.grade}</div>
         <div class="cc-row"><span class="cc-w">${(L.weight/1000).toFixed(1)}t</span><span class="cc-eta">${priceLine}</span>${L.quality?`<span class="cc-sca">${L.quality}</span>`:""}</div>
         <div style="font-size:10px;color:var(--tx3);margin-top:6px">${counter} · ${activity}</div>${L.failReason?`<div style="font-size:10px;color:#c44;margin-top:3px;font-weight:600">⚠ ${L.failReason}</div>`:""}
-        <div style="font-size:10px;color:var(--tx3);margin-top:3px">Closes in ${timer} · ${L.eudr?"EUDR ✓ · ":""}${L.visibility.join(" + ")}</div>
+        ${metaLine}
         ${L.type==="ENG"&&L.minIncrementUSD?`<div style="font-size:9px;color:#7C3AED;margin-top:3px">Min increment ${L.minIncrementUSD} USD/kg · Anti-snipe ${L.antiSnipingMin}min ext (cap ${L.hardCapMin}min)</div>`:""}
       </div>
       <div style="display:flex;gap:6px;padding:8px 12px;border-top:1px solid #f0e8d6">
@@ -1547,14 +1561,34 @@ function renderMarket(){
         ${L.state==="LIVE"?`<button onclick="event.stopPropagation();l4PlaceBid('${id}')" style="flex:1;padding:6px;background:#7C3AED;border:none;border-radius:4px;font-size:11px;color:#fff;font-weight:600;cursor:pointer">${action}</button><button onclick="event.stopPropagation();l4Withdraw('${id}')" title="Withdraw listing" style="padding:6px 10px;background:#fff;border:1px solid #c44;border-radius:4px;font-size:11px;color:#c44;cursor:pointer">×</button>`:L.state==="FAILED"?`<button onclick="event.stopPropagation();l4Relist('${id}')" style="flex:1;padding:6px;background:#5a8a3a;border:none;border-radius:4px;font-size:11px;color:#fff;font-weight:600;cursor:pointer">Re-list</button>`:`<button disabled style="flex:1;padding:6px;background:#ccc;border:none;border-radius:4px;font-size:11px;color:#fff;font-weight:600">${L.state}</button>`}
       </div>
     </div>`;
-  }).join("");
+}
+function l4MarketColumn(mechId,liveListings){
+  const mech=L4_MECH.find(m=>m.id===mechId);
+  const label=mech?mech.label:mechId;
+  const cards=liveListings.filter(([,L])=>L.type===mechId).map(([id,L])=>l4MarketListingCard(id,L));
+  const stack=cards.length?cards.join(""):`<div class="l4-cat-empty">No listings in this category.</div>`;
+  return`<div class="l4-cat-col"><div class="l4-cat-head">${label}</div><div class="l4-cat-stack">${stack}</div></div>`;
+}
+
+function renderMarket(){
+  const liveListings=Object.entries(LISTINGS);
+  const tiles=L4_MECH.map(m=>{const n=liveListings.filter(([,L])=>L.type===m.id&&L.state==="LIVE").length;return`<div style="background:#fff;border:1px solid #e5dccc;border-radius:6px;padding:12px;text-align:center"><div style="font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em">${m.label}</div><div style="font-size:24px;font-weight:700;color:#7C3AED;margin-top:2px">${n}</div><div style="font-size:10px;color:var(--tx3)">live</div></div>`;}).join("");
+  const auctionCols=L4_MARKET_AUCTION_TYPES.map(t=>l4MarketColumn(t,liveListings)).join("");
+  const otherCols=L4_MARKET_OTHER_TYPES.map(t=>l4MarketColumn(t,liveListings)).join("");
   document.getElementById("view-area").innerHTML=`<div style="padding:0 4px 16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div><div style="font-size:18px;font-weight:700;color:var(--tx);margin-bottom:2px">Marketplace</div><div style="font-size:11px;color:var(--tx2)">Matchmaking & Price Discovery · live timers · 5 mechanisms · composable visibility · auto-handoff to Contracting on match</div></div>
       <button onclick="openListingWizard()" style="padding:10px 18px;background:#7C3AED;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(124,58,237,.3)">+ New Listing</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">${tiles}</div>
-    <div class="cgrid">${cards}</div>
+    <div class="l4-market-split">
+      <div class="l4-market-block">
+        <div class="l4-market-cols l4-market-cols--3">${auctionCols}</div>
+      </div>
+      <div class="l4-market-block l4-market-block--secondary">
+        <div class="l4-market-cols l4-market-cols--2">${otherCols}</div>
+      </div>
+    </div>
   </div>`;
   l4StartTimers();
 }
@@ -3369,6 +3403,7 @@ function showUID(uid){
   document.getElementById("uid-pb").innerHTML=meta;
   document.getElementById("uid-ov").classList.add("open");
   document.getElementById("uid-pnl").classList.add("open");
+  if(uid.startsWith("LIST-")&&LISTINGS[uid]&&LISTINGS[uid].endsAt){const Lt=LISTINGS[uid];if(Lt.type==="ENG"||Lt.type==="SEALED"||Lt.type==="REV")l4StartTimers();}
 }
 function closeUID(){document.getElementById("uid-ov").classList.remove("open");document.getElementById("uid-pnl").classList.remove("open");}
 
@@ -3388,10 +3423,11 @@ function strSeed(s){
   for(let i=0;i<s.length;i++)h=((h<<5)-h)+s.charCodeAt(i)|0;
   return Math.abs(h)+1;
 }
-function randomFarmRing(lat,lng,id){
+function randomFarmRing(lat,lng,id,scale){
+  const sc=scale==null||isNaN(scale)?1:scale;
   const seed=strSeed(id);
   const nVert=6+(seed%4);
-  const base=(45+(seed%80))/100000;
+  const base=(45+(seed%80))/100000*sc;
   const ring=[];
   for(let i=0;i<=nVert;i++){
     const ang=(i/nVert)*Math.PI*2+seed*0.017;
@@ -3400,6 +3436,161 @@ function randomFarmRing(lat,lng,id){
     ring.push([lat+r*Math.cos(ang),lng+r*Math.sin(ang)*1.15]);
   }
   return ring;
+}
+/** Max distance (°) from (lat,lng) to any vertex — for clearance math. */
+function farmRingRadialExtentFromCenter(lat,lng,ring){
+  let mx=0;
+  ring.forEach(p=>{mx=Math.max(mx,Math.hypot(p[0]-lat,p[1]-lng));});
+  return mx;
+}
+/** Upper bound on vertex extent for a ring id/scale without building the full ring. */
+function maxFarmRingExtentDeg(id,scale){
+  const sc=scale==null||isNaN(scale)?1:scale;
+  const seed=strSeed(String(id));
+  const base=(45+(seed%80))/100000*sc;
+  const nVert=6+(seed%4);
+  let mx=0;
+  for(let i=0;i<=nVert;i++){
+    const ang=(i/nVert)*Math.PI*2+seed*0.017;
+    const jit=0.55+((seed+i*997)%50)/100;
+    const r=base*jit;
+    const dlat=r*Math.cos(ang);
+    const dlng=r*Math.sin(ang)*1.15;
+    mx=Math.max(mx,Math.hypot(dlat,dlng));
+  }
+  return mx;
+}
+function farmMapEsc(t){
+  if(t==null||t==="")return"—";
+  return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function farmMapPickKebele(woreda,seed){
+  if(!woreda||!woreda.name)return"—";
+  if(woreda.kebeles&&woreda.kebeles.length)return woreda.kebeles[Math.abs(seed)%woreda.kebeles.length];
+  const k=["Gute","Sanka","Haro Bansa","Chora","Boyo","Chabe","Songo","Doyo Gabaya","Kercha","Buno"];
+  return k[Math.abs(seed)%k.length];
+}
+function farmMapTooltipHTML(o){
+  const tag=o.isSubject?'<div class="fmt-badge">Subject farm</div>':'<div class="fmt-badge fmt-near">Neighbouring parcel</div>';
+  return '<div class="fmt">'+tag+
+    '<div class="fmt-sec">Administration</div>'+
+    '<div class="fmt-row"><span>Region</span><b>'+farmMapEsc(o.region)+"</b></div>"+
+    '<div class="fmt-row"><span>Zone</span><b>'+farmMapEsc(o.zoneName)+"</b></div>"+
+    '<div class="fmt-row"><span>Woreda</span><b>'+farmMapEsc(o.woredaName)+" · "+farmMapEsc(o.woredaUid)+"</b></div>"+
+    '<div class="fmt-row"><span>Kebele</span><b>'+farmMapEsc(o.kebele)+"</b></div>"+
+    '<div class="fmt-sec">Farm & household</div>'+
+    '<div class="fmt-row"><span>Owner / operator</span><b>'+farmMapEsc(o.owner)+"</b></div>"+
+    (o.farmUid?'<div class="fmt-row"><span>Farm UID</span><b>'+farmMapEsc(o.farmUid)+"</b></div>":"")+
+    (o.hrvId?'<div class="fmt-row"><span>Harvest UID</span><b>'+farmMapEsc(o.hrvId)+"</b></div>":"")+
+    '<div class="fmt-row"><span>Households (HH)</span><b>'+farmMapEsc(o.hh)+"</b></div>"+
+    '<div class="fmt-sec">Plot & crop</div>'+
+    '<div class="fmt-row"><span>GPS</span><b>'+farmMapEsc(o.lat)+"°N "+farmMapEsc(o.lng)+"°E</b></div>"+
+    '<div class="fmt-row"><span>Plot area</span><b>'+farmMapEsc(o.areaSqm)+" m²</b> <span class=\"fmt-sub\">("+farmMapEsc(o.ha)+" ha)</span></div>"+
+    '<div class="fmt-row"><span>Coffee trees (est.)</span><b>'+farmMapEsc(o.trees)+"</b></div>"+
+    (o.subtitle?'<div class="fmt-subline">'+farmMapEsc(o.subtitle)+"</div>":"")+
+  "</div>";
+}
+function buildTraceFarmParcelTip(tr,c,ll,farmId,hrvId,isSubject){
+  const farm=tr.nodes[farmId];
+  const hrv=hrvId?tr.nodes[hrvId]:null;
+  const zone=ZONES[c.zone];
+  const wId=(farm&&farm.wrdaId)||(hrv&&hrv.wrdaId);
+  const wor=zone&&wId?zone.woredas[wId]:null;
+  const owner=(farm&&farm.farmer)||(hrv&&hrv.name)||"—";
+  const haStr=(farm&&farm.ha)||(hrv&&hrv.ha)||"2.0";
+  const haN=parseFloat(haStr)||2;
+  const seed=strSeed((farmId||"")+"-"+(hrvId||""));
+  const hh=4+(seed%9);
+  const trees=(Math.round(haN*1680+seed%700)).toLocaleString();
+  const areaSqm=Math.round(haN*10000).toLocaleString();
+  const sub=[];
+  if(hrv&&hrv.weight)sub.push(hrv.weight.toLocaleString()+" kg cherry");
+  if(farm&&farm.variety)sub.push(farm.variety);
+  sub.push("Plot record linked to trace (simulated geometry).");
+  return farmMapTooltipHTML({
+    isSubject:!!isSubject,
+    region:zone.region,
+    zoneName:zone.name,
+    woredaName:wor?wor.name:"—",
+    woredaUid:wId||"—",
+    kebele:farmMapPickKebele(wor||{},seed+17),
+    owner,
+    farmUid:farmId||"—",
+    hrvId:hrvId||null,
+    lat:ll.lat.toFixed(4),
+    lng:ll.lng.toFixed(4),
+    ha:String(haStr),
+    trees:String(trees),
+    hh:String(hh),
+    areaSqm:String(areaSqm),
+    subtitle:sub.join(" · "),
+  });
+}
+function genNearbyDemoParcels(cLat,cLng,subjectKey,zone,woreda,wId,count,subjectExtentDeg){
+  const subE=subjectExtentDeg||0;
+  const out=[];
+  const scales=[];
+  for(let j=0;j<count;j++){
+    const sj=strSeed(subjectKey+"~"+j);
+    /* Varied parcel sizes (smaller than subject on average) */
+    scales[j]=0.38+(sj%58)/100;
+  }
+  let rNeiMax=0;
+  for(let j=0;j<count;j++){
+    const sid0="N"+(strSeed(subjectKey+"|"+j)%99999);
+    rNeiMax=Math.max(rNeiMax,maxFarmRingExtentDeg(sid0,scales[j]));
+  }
+  const gap=0.00011;
+  const sinHalf=Math.sin(Math.PI/count);
+  /* Min distance from subject origin to neighbour centre so adjacent neighbours do not overlap */
+  const chordMinD=sinHalf>1e-6?(2*rNeiMax+0.00018)/(2*sinHalf):subE+rNeiMax+gap;
+  for(let i=0;i<count;i++){
+    const sid="N"+(strSeed(subjectKey+"|"+i)%99999);
+    const seed=strSeed(subjectKey+"~"+i);
+    const angJ=(seed%180)/5200;
+    const ang=(Math.PI*2*i)/count+angJ;
+    const sc=scales[i];
+    const rThis=maxFarmRingExtentDeg(sid,sc);
+    const fromSubject=subE+gap+rThis;
+    const D=Math.max(fromSubject,chordMinD)+i*0.000018;
+    const nlat=cLat+D*Math.cos(ang);
+    const nlng=cLng+D*Math.sin(ang)*1.012;
+    const ha=(0.85+((seed%60))/100).toFixed(2);
+    const haN=parseFloat(ha);
+    const owner=FARMER_NAMES[(seed+i*5)%FARMER_NAMES.length];
+    const hh=3+((seed+i*7)%10);
+    const trees=(Math.round(haN*1520+seed%500)).toLocaleString();
+    const areaSqm=Math.round(haN*10000).toLocaleString();
+    const ring=randomFarmRing(nlat,nlng,sid,sc);
+    const tip=farmMapTooltipHTML({
+      isSubject:false,
+      region:zone.region,
+      zoneName:zone.name,
+      woredaName:woreda.name||"—",
+      woredaUid:wId||"—",
+      kebele:farmMapPickKebele(woreda,seed+i),
+      owner,
+      farmUid:"SIM-"+sid,
+      hrvId:null,
+      lat:nlat.toFixed(4),
+      lng:nlng.toFixed(4),
+      ha,
+      trees:String(trees),
+      hh:String(hh),
+      areaSqm:String(areaSqm),
+      subtitle:"Neighbouring smallholder parcel (simulated for neighbourhood context).",
+    });
+    out.push({ring,tip});
+  }
+  return out;
+}
+function farmMapRedIcon(){
+  return L.divIcon({
+    className:"farm-map-pin-wrap",
+    html:'<div class="farm-map-pin"></div>',
+    iconSize:[30,38],
+    iconAnchor:[15,34],
+  });
 }
 function findContainerIdByScanningTraces(pred){
   for(let i=0;i<CONTAINERS.length;i++){
@@ -3464,15 +3655,17 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
   const host=document.getElementById("hrv-map-host");
   const sub=document.getElementById("hrv-map-sub");
   const exp=EXPORTERS.find(e=>e.id===c.exp);
+  const zone=ZONES[c.zone];
+  const ttOpts={sticky:true,direction:"auto",opacity:1,className:"farm-map-tt"};
   if(focusHrvId){
-    document.getElementById("hrv-map-title").textContent=focusHrvId+" · harvest map";
-    sub.textContent="Zoomed to this batch · "+(c.grade||"")+(exp?" · "+exp.short:"");
+    document.getElementById("hrv-map-title").textContent=focusHrvId+" · farm neighbourhood";
+    sub.textContent="Initial view: subject parcel · zoom out or pan for grey neighbours · hover any polygon for metadata · "+(c.grade||"")+(exp?" · "+exp.short:"");
   }else if(focusFarmUid){
-    document.getElementById("hrv-map-title").textContent=focusFarmUid+" · harvest map";
-    sub.textContent=(show.length===1?"One batch":"All batches at this farm")+" on "+c.id+" · "+(c.grade||"");
+    document.getElementById("hrv-map-title").textContent=focusFarmUid+" · farm neighbourhood";
+    sub.textContent="Initial view: subject parcel · zoom out or pan for grey neighbours · hover parcels for details · "+(c.grade||"");
   }else{
     document.getElementById("hrv-map-title").textContent="All harvest batches · "+c.id;
-    sub.textContent=show.length?`${show.length} batch(es) on this shipment — ${c.grade||""} · ${exp?exp.short:"—"}`:"No harvest GPS in trace.";
+    sub.textContent=show.length?`Hover parcels for woreda / household / plot data · ${show.length} batch(es) — ${c.grade||""} · ${exp?exp.short:"—"}`:"No harvest GPS in trace.";
   }
   ov.classList.add("open");
   ov.setAttribute("aria-hidden","false");
@@ -3486,23 +3679,52 @@ function openHrvMapModal(containerId, focusHrvId, focusFarmUid){
     _hrvMap=L.map(host,{scrollWheelZoom:true,minZoom:5,maxZoom:19});
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(_hrvMap);
     const lg=L.layerGroup().addTo(_hrvMap);
-    const rings=[];
-    show.forEach(p=>{
-      const ring=randomFarmRing(p.ll.lat,p.ll.lng,p.id);
-      rings.push(ring);
-      L.polygon(ring,{color:"#15803d",weight:2,fillColor:"#22c55e",fillOpacity:0.22,opacity:0.95}).addTo(lg);
-      L.circleMarker(p.ll,{radius:7,color:"#14532d",weight:2,fillColor:"#4ade80",fillOpacity:1})
-        .bindPopup("<b>"+p.id+"</b><br>"+(p.node.name||"")+"<br>"+p.node.weight.toLocaleString()+" kg cherry")
-        .addTo(lg);
-    });
-    if(show.length===1){
-      const b=L.polygon(rings[0]).getBounds();
-      const tight=!!(focusHrvId||focusFarmUid);
-      _hrvMap.fitBounds(b.pad(tight?0.06:0.65),{maxZoom:tight?18:16});
+    const focused=!!(focusHrvId||focusFarmUid);
+    if(focused){
+      const primary=show[0];
+      let subjectLl={...primary.ll};
+      let subjectFarmId=primary.node.actor;
+      if(focusFarmUid&&tr.nodes[focusFarmUid]){
+        const g=parseTraceGeo(tr.nodes[focusFarmUid].gps);
+        if(g){subjectLl=g;subjectFarmId=focusFarmUid;}
+      }
+      const farmNode=tr.nodes[subjectFarmId];
+      const wId=(farmNode&&farmNode.wrdaId)||primary.node.wrdaId;
+      const woreda=(zone&&wId&&zone.woredas[wId])||{name:"—"};
+      const hrvForTip=focusHrvId||(show[0]&&show[0].id)||null;
+      const subKey=focusHrvId||subjectFarmId||"sub";
+      const subRing=randomFarmRing(subjectLl.lat,subjectLl.lng,subKey);
+      const subExtent=farmRingRadialExtentFromCenter(subjectLl.lat,subjectLl.lng,subRing);
+      const nearby=genNearbyDemoParcels(subjectLl.lat,subjectLl.lng,String(focusHrvId||focusFarmUid||subjectFarmId),zone,woreda,wId,6,subExtent);
+      nearby.forEach(n=>{
+        L.polygon(n.ring,{color:"#78716c",weight:1.5,fillColor:"#a8a29e",fillOpacity:0.2,opacity:0.95})
+          .bindTooltip(n.tip,ttOpts).addTo(lg);
+      });
+      const subTip=buildTraceFarmParcelTip(tr,c,subjectLl,subjectFarmId,hrvForTip,true);
+      L.polygon(subRing,{color:"#b91c1c",weight:2.5,fillColor:"#fecaca",fillOpacity:0.38,opacity:1})
+        .bindTooltip(subTip,ttOpts).addTo(lg);
+      L.marker([subjectLl.lat,subjectLl.lng],{icon:farmMapRedIcon(),zIndexOffset:500})
+        .bindTooltip("<div class=\"fmt-pin-tip\"><b>Subject</b><br>Harvest / farm anchor</div>",{...ttOpts,direction:"top"}).addTo(lg);
+      /* Frame only the subject parcel; neighbours stay on the map but may be cropped until zoom/pan */
+      const b=L.latLngBounds(subRing);
+      b.extend([subjectLl.lat,subjectLl.lng]);
+      _hrvMap.fitBounds(b.pad(0.04),{maxZoom:19,padding:[16,16]});
+      if(_hrvMap.getZoom()<15)_hrvMap.setZoom(15);
     }else{
+      const rings=[];
+      show.forEach(p=>{
+        const ring=randomFarmRing(p.ll.lat,p.ll.lng,p.id);
+        rings.push(ring);
+        const tip=buildTraceFarmParcelTip(tr,c,p.ll,p.node.actor,p.id,false);
+        L.polygon(ring,{color:"#15803d",weight:2,fillColor:"#22c55e",fillOpacity:0.22,opacity:0.95})
+          .bindTooltip(tip,ttOpts).addTo(lg);
+        L.circleMarker(p.ll,{radius:6,color:"#14532d",weight:2,fillColor:"#4ade80",fillOpacity:1})
+          .bindTooltip(tip,{...ttOpts,sticky:false}).addTo(lg);
+      });
       const b=L.latLngBounds([]);
       rings.forEach(r=>{r.forEach(ll=>b.extend(ll));});
-      _hrvMap.fitBounds(b,{padding:[44,44]});
+      show.forEach(p=>b.extend([p.ll.lat,p.ll.lng]));
+      _hrvMap.fitBounds(b,{padding:[28,28],maxZoom:15});
     }
     _hrvMap.invalidateSize(true);
   },60);
@@ -3579,7 +3801,7 @@ function getUIDMeta(uid){
   if(uid.startsWith("PAY-")){const p=PAYMENTS[uid];if(p){payShowDetail(uid);return"";}return null;}
   if(uid.startsWith("BNK-")){const b=BANK_PANEL[uid];if(!b)return null;return`<div class="mty">Partner Bank · Bank Panel</div><div class="mti">${b.name}</div>${mgr([["Bank UID",uid],["Short",b.short],["Type",b.type],["Trade Desk",b.desk],["Rate",b.rate]])}<div class="ms2">Capabilities</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${b.capabilities.map(c=>`<span style="font-size:10px;background:rgba(58,122,138,.1);color:#3a7a8a;padding:3px 8px;border-radius:8px;border:1px solid rgba(58,122,138,.3)">${c}</span>`).join("")}</div><div style="margin-top:10px;padding:8px 10px;background:rgba(58,122,138,.06);border-left:2px solid #3a7a8a;font-size:11px;color:var(--tx2);border-radius:3px">Pre-approved partner panel · NBE-licensed or correspondent-capable</div>`;}
   if(uid.startsWith("CTR-")){const c=CONTRACTS[uid];if(c){ctrShowDetail(uid);return"";}return null;}
-  if(uid.startsWith("LIST-")){const L=LISTINGS[uid];if(!L)return null;const c=LISTING_STATE_COLOR[L.state]||"#666";const stateBadge=`<span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:.05em;background:${c};color:#fff">${L.state}</span>`;const rows=[["Listing UID",uid],["Type",LISTING_TYPE_LABEL[L.type]],["State",L.state]];if(L.lot)rows.push(["Lot",L.lot]);if(L.weight)rows.push(["Weight",L.weight.toLocaleString()+" kg"]);if(L.grade)rows.push(["Grade / Spec",L.grade]);if(L.quality)rows.push(["Quality",L.quality]);rows.push(["Price Mode",L.priceMode]);if(L.priceUSDkg)rows.push(["Asking",L.priceUSDkg+" USD/kg"]);if(L.reserveUSDkg)rows.push(["Reserve",L.reserveUSDkg+" USD/kg"]);if(L.currentUSDkg)rows.push(["Current Bid",L.currentUSDkg+" USD/kg"]);if(L.ceilingUSDkg)rows.push(["Ceiling",L.ceilingUSDkg+" USD/kg"]);if(L.currentLowUSDkg)rows.push(["Current Low",L.currentLowUSDkg+" USD/kg"]);if(L.differential)rows.push(["Differential",L.differential]);if(L.minIncrement)rows.push(["Min Increment",L.minIncrement]);if(L.incoterm)rows.push(["Incoterm",L.incoterm]);if(L.duration)rows.push(["Duration",L.duration]);if(L.ends)rows.push(["Closes",L.ends]);if(L.antiSniping)rows.push(["Anti-Sniping",L.antiSniping]);if(L.bids!==undefined)rows.push(["Bids",String(L.bids)]);if(L.offers!==undefined)rows.push(["Offers Received",String(L.offers)]);if(L.bidsReceived!==undefined)rows.push(["Sealed Bids",String(L.bidsReceived)+" (blind)"]);rows.push(["Visibility",L.visibility.join(" + ")]);if(L.eudr)rows.push(["EUDR","Eligible"]);const idLine=L.sellerVisible===false?"Seller: anonymous (revealed at match)":(L.seller?"Seller: "+L.seller:(L.buyer?"Buyer: "+L.buyer+" — "+L.buyerCompany:""));return`<div class="mty">Marketplace Listing ${stateBadge}</div><div class="mti">${LISTING_TYPE_LABEL[L.type]}</div>${mgr(rows)}<div class="ms2">${idLine}</div>${L.lot?mrel("Lot",[muid(L.lot)]):""}${L.note?`<div style="margin-top:8px;padding:8px 10px;background:rgba(124,58,237,.08);border-left:2px solid #7C3AED;font-size:11px;color:var(--tx2);border-radius:3px">${L.note}</div>`:""}<div style="margin-top:8px;padding:8px 10px;background:rgba(124,58,237,.08);border-left:2px solid #7C3AED;font-size:11px;color:var(--tx2);border-radius:3px">Matchmaking & Price Discovery · on match → Contracting</div>`;}
+  if(uid.startsWith("LIST-")){const L=LISTINGS[uid];if(!L)return null;const c=LISTING_STATE_COLOR[L.state]||"#666";const stateBadge=`<span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;letter-spacing:.05em;background:${c};color:#fff">${L.state}</span>`;const rows=[["Listing UID",uid],["Type",LISTING_TYPE_LABEL[L.type]],["State",L.state]];if(L.lot)rows.push(["Lot",L.lot]);if(L.weight)rows.push(["Weight",L.weight.toLocaleString()+" kg"]);if(L.grade)rows.push(["Grade / Spec",L.grade]);if(L.quality)rows.push(["Quality",L.quality]);rows.push(["Price Mode",L.priceMode]);if(L.priceUSDkg)rows.push(["Asking",L.priceUSDkg+" USD/kg"]);if(L.reserveUSDkg)rows.push(["Reserve",L.reserveUSDkg+" USD/kg"]);if(L.currentUSDkg)rows.push(["Current Bid",L.currentUSDkg+" USD/kg"]);if(L.ceilingUSDkg)rows.push(["Ceiling",L.ceilingUSDkg+" USD/kg"]);if(L.currentLowUSDkg)rows.push(["Current Low",L.currentLowUSDkg+" USD/kg"]);if(L.differential)rows.push(["Differential",L.differential]);if(L.minIncrement)rows.push(["Min Increment",L.minIncrement]);if(L.incoterm)rows.push(["Incoterm",L.incoterm]);if(L.duration)rows.push(["Duration",L.duration]);if(L.ends)rows.push(["Closes",L.ends]);if(L.antiSniping)rows.push(["Anti-Sniping",L.antiSniping]);if(L.bids!==undefined)rows.push(["Bids",String(L.bids)]);if(L.offers!==undefined)rows.push(["Offers Received",String(L.offers)]);if(L.bidsReceived!==undefined)rows.push(["Sealed Bids",String(L.bidsReceived)+" (blind)"]);rows.push(["Visibility",L.visibility.join(" + ")]);if(L.eudr)rows.push(["EUDR","Eligible"]);const idLine=L.sellerVisible===false?"Seller: anonymous (revealed at match)":(L.seller?"Seller: "+L.seller:(L.buyer?"Buyer: "+L.buyer+" — "+L.buyerCompany:""));const sheetHero=L.endsAt&&(L.state==="LIVE"||L.state==="ENGAGED")&&(L.type==="ENG"||L.type==="SEALED"||L.type==="REV");const cdHead=L.type==="SEALED"?"Sealed auction closes in":L.type==="ENG"?"English auction closes in":"Reverse auction closes in";const countdownHtml=sheetHero?`<div class="l4-sheet-hero" role="timer" aria-live="polite"><div class="l4-sheet-hero__kicker">${cdHead}<span class="l4-sheet-hero__demo-tag"> · demo</span></div><div class="l4-sheet-hero__time"><span class="l4-timer" data-l4-timer="${L.endsAt}">${l4FmtTimer(L.endsAt-Date.now())}</span></div><div class="l4-sheet-hero__foot"><span>Published schedule</span><b>${L.ends||"—"}</b></div></div>`:"";return`${countdownHtml}<div class="mty">Marketplace Listing ${stateBadge}</div><div class="mti">${LISTING_TYPE_LABEL[L.type]}</div>${mgr(rows)}<div class="ms2">${idLine}</div>${L.lot?mrel("Lot",[muid(L.lot)]):""}${L.note?`<div style="margin-top:8px;padding:8px 10px;background:rgba(124,58,237,.08);border-left:2px solid #7C3AED;font-size:11px;color:var(--tx2);border-radius:3px">${L.note}</div>`:""}<div style="margin-top:8px;padding:8px 10px;background:rgba(124,58,237,.08);border-left:2px solid #7C3AED;font-size:11px;color:var(--tx2);border-radius:3px">Matchmaking & Price Discovery · on match → Contracting</div>`;}
   
   
   if(uid.startsWith("FARM-")){let fn=null,farmCid=null;for(const cId in traceCache){const n=traceCache[cId].nodes[uid];if(n){fn=n;farmCid=cId;break;}}if(!fn)return`<div class="mty">Registered Farm</div><div class="mti">${uid}</div><div style="font-size:11px;color:var(--tx3);margin-top:8px">Expand trace tree first to load farm data.</div>`;const aid=actorLookup(fn.farmer)||"ACT-FRM-0241";const fc=farmCid?CONTAINERS.find(x=>x.id===farmCid):null;const farmGps=fn.gps&&(fc&&TRACE_OK.includes(fc.status))?`<span class="gps-val-wrap"><span class="gps-txt">${fn.gps}</span><button type="button" class="gps-map-btn-inline" onclick="event.stopPropagation();openHrvMapModal('${farmCid}',null,'${uid}')" title="Map harvests at this farm">${HRV_MAP_SVG12}</button></span>`:fn.gps;return`<div class="mty">Registered Farm</div><div class="mti">${fn.farmer}</div>${mgr([["Farm UID",uid],["Farmer",fn.farmer],["Plot",fn.ha+" ha"],["GPS",farmGps],["Woreda",fn.wrdaId||"—"],["Zone",fn.zoneId||"—"],["Variety",fn.variety||"—"],["Verified Since",fn.since]])}${mrel("Operator",[muid(aid)])}${mrel("Woreda",fn.wrdaId?[muid(fn.wrdaId)]:[])}${mrel("Zone",fn.zoneId?[muid(fn.zoneId)]:[])}`;} 

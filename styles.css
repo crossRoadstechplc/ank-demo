@@ -141,6 +141,87 @@ input,select,textarea{font-family:inherit;font-size:13px}
 .cc-w{font-family:'SF Mono',Menlo,monospace;font-size:11px;font-weight:600;color:var(--amber)}
 .cc-eta{font-size:10px;color:#3a6a3a;font-weight:500}
 .cc-sca{font-size:10px;color:var(--tx3)}
+/* ── L4 marketplace countdown (compact; auctions only) ─────── */
+.l4-card-countdown{
+  text-align:center;
+  padding:8px 10px 10px;
+  margin:0 -1px;
+  background:linear-gradient(180deg,rgba(124,58,237,.1) 0%,rgba(124,58,237,.04) 100%);
+  border-bottom:1px solid rgba(124,58,237,.18);
+  box-shadow:none;
+}
+.l4-card-countdown__eyebrow{
+  font-size:8px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tx3);margin-bottom:3px;
+}
+.l4-card-countdown__value{
+  font-size:clamp(0.95rem,2.6vw,1.2rem);
+  font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums;
+  letter-spacing:.02em;color:#5b21b6;
+}
+.l4-card-countdown__value .l4-tick{font-size:inherit;font-weight:inherit}
+.l4-card-countdown__sub{
+  margin-top:4px;font-size:9px;color:var(--tx3);font-weight:500;
+}
+.l4-card-meta{margin-top:8px;font-size:10px;color:var(--tx3);line-height:1.35}
+.l4-card-meta__eudr{color:#166534;font-weight:700}
+.l4-card-meta__vis{color:var(--tx2)}
+.l4-timer{font-variant-numeric:tabular-nums}
+.l4-tick{display:inline-block;font-variant-numeric:tabular-nums}
+.l4-tick--closed{color:#b91c1c;font-weight:800}
+.l4-tick--days{color:#4c1d95;font-weight:800}
+.l4-tick--hours{color:#c2410c;font-weight:800}
+.l4-tick--mins{color:#b45309;font-weight:800;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.l4-tick__unit{font-size:.72em;font-weight:700;opacity:.85;margin:0 .04em}
+.uid-pb > .l4-sheet-hero:first-child{margin:-10px -20px 14px;padding-top:14px;border-radius:12px 12px 0 0}
+.l4-sheet-hero{
+  text-align:center;
+  padding:12px 16px 14px;
+  background:linear-gradient(180deg,rgba(124,58,237,.1) 0%,rgba(124,58,237,.03) 100%);
+  border-bottom:1px solid rgba(124,58,237,.2);
+}
+.l4-sheet-hero__kicker{
+  font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);margin-bottom:5px;
+}
+.l4-sheet-hero__demo-tag{font-weight:600;letter-spacing:.04em;color:var(--tx3);text-transform:none}
+.l4-sheet-hero__time{
+  font-size:clamp(1.25rem,4.5vw,1.65rem);
+  font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:.02em;color:#5b21b6;
+}
+.l4-sheet-hero__time .l4-tick{font-size:inherit;font-weight:inherit}
+.l4-sheet-hero__foot{
+  margin-top:10px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:10px;color:var(--tx3);
+}
+.l4-sheet-hero__foot b{font-size:11px;color:var(--tx);font-weight:600}
+.l4-market-split{display:flex;flex-direction:column;gap:0;margin-top:2px}
+.l4-market-block{padding-bottom:4px;background:linear-gradient(180deg,rgba(124,58,237,.04) 0%,transparent 48px);border-radius:8px}
+.l4-market-block--secondary{
+  margin-top:18px;padding-top:16px;border-top:1px solid var(--border2);
+  background:linear-gradient(180deg,rgba(58,122,138,.05) 0%,transparent 40px);border-radius:8px;
+}
+.l4-market-cols{
+  display:grid;gap:10px;align-items:start;
+}
+.l4-market-cols--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.l4-market-cols--2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:900px){
+  .l4-market-cols--3{grid-template-columns:1fr}
+  .l4-market-cols--2{grid-template-columns:1fr}
+}
+.l4-cat-col{display:flex;flex-direction:column;gap:0;min-width:0}
+.l4-cat-head{
+  font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#5b21b6;
+  text-align:center;padding:9px 8px;margin-bottom:8px;
+  background:linear-gradient(180deg,#faf8ff,#f3f0fa);
+  border:1px solid rgba(124,58,237,.22);border-radius:6px;
+}
+.l4-market-block--secondary .l4-cat-head{color:#3a6a6a;border-color:rgba(58,122,138,.22);background:linear-gradient(180deg,#f6faf9,#eef5f3)}
+.l4-cat-stack{display:flex;flex-direction:column;gap:8px}
+.l4-cat-empty{
+  font-size:11px;color:var(--tx3);text-align:center;padding:18px 10px;border:1px dashed var(--border2);
+  border-radius:6px;background:#fafaf6;
+}
 .cc-expand{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-top:1px solid var(--border2);cursor:pointer;transition:var(--tap-ease)}
 .cc-expand:hover{background:#fafaf6}
 .cc-expand:active{background:#f0ebe3;box-shadow:var(--press-inset-soft)}
@@ -478,6 +559,32 @@ input,select,textarea{font-family:inherit;font-size:13px}
 .hrv-map-host .leaflet-container{font-family:inherit}
 .hrv-map-empty{display:flex;align-items:center;justify-content:center;height:100%;min-height:200px;padding:24px;text-align:center;font-size:13px;color:var(--tx3);line-height:1.5}
 .hrv-map-foot{margin:0;padding:8px 18px 14px;font-size:10px;color:var(--tx3);border-top:1px solid var(--border2);flex-shrink:0}
+
+/* Harvest map — Leaflet tooltips & subject pin */
+.leaflet-tooltip.farm-map-tt{
+  background:#fffef8 !important;
+  color:var(--tx);
+  border:1px solid #e8dcc8 !important;
+  border-radius:8px;
+  box-shadow:0 12px 40px rgba(26,18,8,.2) !important;
+  padding:10px 12px !important;
+  max-width:min(300px,92vw);
+  font-family:inherit;
+  pointer-events:none;
+}
+.farm-map-tt .fmt{min-width:228px;max-width:min(288px,88vw)}
+.farm-map-tt .fmt-badge{font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:4px;margin-bottom:8px;display:inline-block;background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+.farm-map-tt .fmt-badge.fmt-near{background:#f5f5f4;color:#57534e;border-color:#e7e5e4}
+.farm-map-tt .fmt-sec{font-size:8px;color:var(--tx3);text-transform:uppercase;letter-spacing:.09em;margin:10px 0 5px;font-weight:700;border-top:1px solid #f0ebe3;padding-top:8px}
+.farm-map-tt .fmt-sec:first-of-type{border-top:none;padding-top:0;margin-top:0}
+.farm-map-tt .fmt-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:4px 10px;margin-bottom:4px;font-size:10px;align-items:baseline}
+.farm-map-tt .fmt-row span{color:var(--tx3)}
+.farm-map-tt .fmt-row b{color:var(--tx);font-weight:600;text-align:right;word-break:break-word}
+.farm-map-tt .fmt-sub{font-weight:500;color:var(--tx3)}
+.farm-map-tt .fmt-subline{font-size:9px;color:var(--tx3);margin-top:8px;line-height:1.45;font-style:italic;border-left:2px solid var(--amber);padding:6px 8px;background:#fffbf0;border-radius:0 4px 4px 0}
+.farm-map-pin-wrap{background:transparent !important;border:none !important}
+.farm-map-pin{width:22px;height:22px;background:#dc2626;border-radius:50% 50% 50% 0;transform:rotate(-45deg) translate(2px,-4px);border:2px solid #fff;box-shadow:0 2px 12px rgba(0,0,0,.35)}
+.farm-map-tt .fmt-pin-tip{text-align:center;font-size:10px;line-height:1.35;color:var(--tx2)}
 
 /* Timeline row — harvest map trigger (overlays track; .tl-track is position:relative) */
 .tl-map-ic-btn{position:absolute;top:6px;right:10px;z-index:10;display:flex;align-items:center;justify-content:center;width:30px;height:30px;margin:0;padding:0;border:none;border-radius:6px;background:var(--surface);color:var(--tx2);cursor:pointer;border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.06);transition:var(--tap-ease)}
