@@ -439,12 +439,24 @@ function filterSt(s,btn){
 }
 function setView(m,btn){
   viewMode=m;
-  const sbMp=document.getElementById("sb-marketplace");
-  if(sbMp)sbMp.classList.toggle("on",m==="market");
+  const auctionNav=document.getElementById("bsn-auction");
+  if(auctionNav)auctionNav.classList.toggle("on",m==="market");
   document.getElementById("v-cards").classList.toggle("on",m==="cards");
   document.getElementById("v-timeline").classList.toggle("on",m==="timeline");
   renderView();
   renderRibbon();
+}
+/** Importer sidebar — open live auction / listing grid in the main canvas (closes backstage overlay). */
+function openAuctionFromSidebar(btn){
+  const homeTab=document.getElementById("tab-home");
+  if(typeof switchRTab==="function")switchRTab("home",homeTab||null);
+  document.querySelectorAll(".bs-navitem").forEach(function(b){b.classList.remove("on");});
+  if(btn)btn.classList.add("on");
+  const dyn=document.getElementById("bs-dynamic");
+  bsOpen=false;
+  if(dyn){dyn.innerHTML="";dyn.hidden=true;}
+  setPortfolioWelcomeVisible(false);
+  if(typeof setView==="function")setView("market",null);
 }
 function handleSearch(q){
   if(!q.trim()){renderView();return;}
@@ -1606,7 +1618,7 @@ function renderMarket(){
   const otherCols=L4_MARKET_OTHER_TYPES.map(t=>l4MarketColumn(t,liveListings)).join("");
   document.getElementById("view-area").innerHTML=`<div style="padding:0 4px 16px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div><div style="font-size:18px;font-weight:700;color:var(--tx);margin-bottom:2px">Marketplace</div><div style="font-size:11px;color:var(--tx2)">Matchmaking & Price Discovery · live timers · 5 mechanisms · composable visibility · auto-handoff to Contracting on match</div></div>
+      <div><div style="font-size:18px;font-weight:700;color:var(--tx);margin-bottom:2px">Auction</div><div style="font-size:11px;color:var(--tx2)">Matchmaking & price discovery · live timers · five mechanisms · composable visibility · auto-handoff to Contracting on match</div></div>
       <button onclick="openListingWizard()" style="padding:10px 18px;background:#7C3AED;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(124,58,237,.3)">+ New Listing</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">${tiles}</div>
@@ -2588,8 +2600,10 @@ function openBackstage(section){
   var sid=section;
   if(sid==null||sid===""){showBsPortfolioPreview();return;}
   if(sid==="portfolio"){showBsPortfolioPreview();return;}
+  if(sid==="market")sid="auction";
   var btn=document.getElementById("bsn-"+sid);
   if(!btn){showBsPortfolioPreview();return;}
+  if(sid==="auction"){openAuctionFromSidebar(btn);return;}
   showBsSection(sid,btn);
 }
 function closeBackstage(){showBsPortfolioPreview();}
@@ -2627,7 +2641,6 @@ function showBsSection(id,btn){
   else if(id==="actors"){el.innerHTML=renderBsActors();}
   else if(id==="inv"){el.innerHTML=renderBsInv();}
   else if(id==="quality"){el.innerHTML=renderBsQuality();}
-  else if(id==="market"){el.innerHTML=renderBsMarket();}
   else if(id==="contracts"){el.innerHTML=renderBsContracts();}
   else if(id==="financing"){el.innerHTML=renderBsFinancing();}
   else if(id==="settlement"){el.innerHTML=renderBsSettlement();}
@@ -3123,30 +3136,6 @@ function renderBsContracts(){
     docketRibbon+kanban+terminalList+footerHint+'</div>';
 }
 
-function renderBsMarket(){
-  const rows=Object.entries(LISTINGS).map(([id,L])=>{
-    const c=LISTING_STATE_COLOR[L.state]||"#666";
-    const priceLine=L.priceUSDkg?L.priceUSDkg+" USD/kg":(L.currentUSDkg?"Current "+L.currentUSDkg+" USD/kg":(L.differential?L.differential:(L.ceilingUSDkg?"Ceiling "+L.ceilingUSDkg+" USD/kg":"—")));
-    const counter=L.lot?("Lot "+L.lot):(L.buyerCompany||"Buyer-side");
-    const activity=L.bids!==undefined?(L.bids+" bids"):(L.offers!==undefined?(L.offers+" offers"):(L.bidsReceived!==undefined?(L.bidsReceived+" sealed bids"):"—"));
-    return`<div class="bs-rec-item" onclick="closeBackstage();showUID('${id}')" style="cursor:pointer">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">${muid(id)}<span style="background:${c};color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;font-size:9px;letter-spacing:.05em">${L.state}</span></div>
-      <div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:2px">${LISTING_TYPE_LABEL[L.type]} · ${L.grade}</div>
-      <div style="font-size:11px;color:var(--tx2);margin-bottom:2px">${L.weight.toLocaleString()} kg · ${priceLine} · ${L.incoterm||"—"}</div>
-      <div style="font-size:10px;color:var(--tx3)">${counter} · ${activity} · closes ${L.ends}</div>
-      <div style="font-size:10px;color:var(--tx3);margin-top:3px">Visibility: ${L.visibility.join(" + ")}</div>
-    </div>`;}).join("");
-  const counts={};Object.values(LISTINGS).forEach(L=>{counts[L.type]=(counts[L.type]||0)+1});
-  const tiles=Object.keys(LISTING_TYPE_LABEL).map(t=>`<div style="background:#fff;border:1px solid #e5dccc;border-radius:6px;padding:12px"><div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">${LISTING_TYPE_LABEL[t]}</div><div style="font-size:22px;font-weight:700;color:#7C3AED">${counts[t]||0}</div><div style="font-size:10px;color:var(--tx3)">active listings</div></div>`).join("");
-  return`<div class="bsc">
-    <div class="bsc-title">Marketplace</div>
-    <div class="bsc-sub">Matchmaking & Price Discovery. Five listing mechanisms at launch (IOI, RFQ, English, Sealed-Bid, Reverse). Composable visibility (open / invite / rating / region / certification). On match, an auto-drafted smart contract hands off to Contracting where banks countersign payment + performance guarantees and insurance auto-attaches at loading.</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px">${tiles}</div>
-    <div style="background:rgba(124,58,237,.06);border-left:3px solid #7C3AED;padding:10px 14px;border-radius:4px;margin-bottom:14px;font-size:11px;color:var(--tx2)"><b>Lot locking:</b> active listings move the underlying lot to <span style="background:#7C3AED;color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700">LISTED</span> sub-state — exclusive, no parallel listings or transfers. Withdrawal allowed only pre-engagement; post-engagement requires admin review.</div>
-    <div class="bsc-sec-title">Active Listings</div>
-    <div class="bs-rec-list">${rows}</div>
-  </div>`;
-}
 function renderBsQuality(){
   // Roll up cup scores from all traced contracts
   const traced=CONTAINERS.filter(c=>TRACE_OK.includes(c.status)&&c.cup);
@@ -3155,7 +3144,7 @@ function renderBsQuality(){
   const labRows=Object.entries(LAB_REGISTRY).map(([id,l])=>`<div class="bs-rec-item" onclick="closeBackstage();showUID('${id}')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;margin-bottom:4px">${muid(id)}<span style="font-size:9px;font-weight:700;background:#CFFAFE;color:#155E75;padding:2px 7px;border-radius:10px">ROUND-ROBIN</span></div><div style="font-size:13px;font-weight:600;color:var(--tx);margin-bottom:2px">${l.name}</div><div style="font-size:11px;color:var(--tx2);margin-bottom:2px">${l.city} · ${l.accred.join(" · ")}</div><div style="font-size:10px;color:var(--tx3)">${l.samples.toLocaleString()} samples processed since ${l.since}</div></div>`).join("");
   const recentResults=traced.slice(0,8).map(c=>{const[b,col]=gradeBand(c.cup);return`<div class="bs-rec-item" onclick="closeBackstage();openDetail('${c.id}')" style="cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">${muid(c.id)}<span style="background:${col};color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;font-size:10px">${c.cup.toFixed(2)}</span></div><div style="font-size:12px;font-weight:500;color:var(--tx);margin-bottom:2px">${c.grade} · ${c.process}</div><div style="font-size:10px;color:var(--tx3)">${b} · ${c.areas.join(", ")}</div></div>`;}).join("");
   return`<div class="bsc">
-    <div class="bsc-title">Quality &amp; Labs</div>
+    <div class="bsc-title">Quality and Labs</div>
     <div class="bsc-sub">Quality & Sampling. Black-box lab assignment, dual-standard grading (SCA + CLU), append-only results with 7-day challenge window. Each result binds to its sample UID and rolls up to the originating actor's quality history.</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px">
       <div style="background:#fff;border:1px solid #e5dccc;border-radius:6px;padding:12px"><div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Portfolio Avg</div><div style="font-size:22px;font-weight:700;color:#A87832">${avg.toFixed(2)}</div><div style="font-size:10px;color:var(--tx3)">SCA cup score</div></div>
@@ -3186,7 +3175,7 @@ function renderBsInv(){
   });
   const evCard=(icon,title,desc,tag)=>`<div style="background:#fff;border:1px solid #e5dccc;border-radius:6px;padding:14px;margin-bottom:10px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><div style="width:28px;height:28px;background:#FEF3C7;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px">${icon}</div><div style="font-size:13px;font-weight:600;color:var(--tx)">${title}</div><div style="margin-left:auto;font-size:9px;font-weight:700;background:#E5E7EB;color:#374151;padding:2px 7px;border-radius:10px;letter-spacing:.05em">${tag}</div></div><div style="font-size:11px;color:var(--tx2);line-height:1.5">${desc}</div></div>`;
   return`<div class="bsc">
-    <div class="bsc-title">Inventory Operations</div>
+    <div class="bsc-title">Inventory</div>
     <div class="bsc-sub">Inventory & Traceability. By-products and samples are tracked as child lots with their own UIDs and custody chains, closing the volume loop and enabling EUDR/ESG reporting on by-product fate.</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px">
       <div style="background:#fff;border:1px solid #e5dccc;border-radius:6px;padding:12px"><div style="font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">By-product Lots</div><div style="font-size:22px;font-weight:700;color:#A78B5C">${bypCount}</div><div style="font-size:10px;color:var(--tx3)">${(bypKg/1000).toFixed(1)}t · husks &amp; pulp</div></div>
